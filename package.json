@@ -1,0 +1,28 @@
+{
+  "name": "cic-governance",
+  "version": "1.0.0",
+  "description": "CIC Governance Layer - Phase 1",
+  "main": "src/governance/index.ts",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:governance": "jest src/governance",
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "governance",
+    "audit",
+    "skills"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.42",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5.9.3"
+  }
+}
