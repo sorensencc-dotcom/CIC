@@ -1,0 +1,31 @@
+observability/system/CIC_SYSTEM_OVERVIEW.json
+  s_23364b39b23e42::t_251e7af0fe49ea 404-439
+services/audit/Dockerfile
+  s_14faad8c1bd803::t_5c18b29ea80d24 1-17
+services/orchestrator/Dockerfile
+  s_14faad8c1bd803::t_f09d2e66101fa2 1-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "4c18e6a5893473b2d9b6b24c6f0f1d4acf6152cb",
+  "prompts": {},
+  "sessions": {
+    "s_14faad8c1bd803": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b0f0ef3-8d9c-47fe-9477-cd38ebc8f590",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    },
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
