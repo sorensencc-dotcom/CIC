@@ -1,0 +1,405 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "cic-system-overview",
+    "title": "CIC System Overview",
+    "tags": ["cic", "wayland", "caveman", "torquequery", "canonical"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "15s",
+    "panels": [
+      {
+        "id": 1,
+        "type": "stat",
+        "title": "System Health",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(up{job=~\"cic|grafana|prometheus|loki\"})",
+            "refId": "A",
+            "legendFormat": "healthy_services"
+          },
+          {
+            "expr": "sum(rate(cic_errors_total[5m]))",
+            "refId": "B",
+            "legendFormat": "error_rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0}]}},
+          "overrides": []
+        },
+        "description": "owner: ops-team@example.com\nrunbook: https://repo/runbooks/system.md\nalert_id: cic_system_down"
+      },
+
+      {
+        "id": 2,
+        "type": "graph",
+        "title": "Wayland Executions Per Minute by Adapter",
+        "gridPos": {"x": 6, "y": 0, "w": 12, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(rate(wayland_tool_exec_total[1m])) by (adapter)",
+            "refId": "A",
+            "legendFormat": "{{adapter}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: wayland-owner@example.com\nrunbook: https://repo/runbooks/wayland.md\nalert_id: wayland_exec_drop"
+      },
+
+      {
+        "id": 3,
+        "type": "graph",
+        "title": "Wayland Execution Latency p50 p95 p99",
+        "gridPos": {"x": 0, "y": 6, "w": 12, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(wayland_tool_exec_duration_seconds_bucket[5m])) by (le, adapter))",
+            "refId": "A",
+            "legendFormat": "p50 {{adapter}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(wayland_tool_exec_duration_seconds_bucket[5m])) by (le, adapter))",
+            "refId": "B",
+            "legendFormat": "p95 {{adapter}}"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(wayland_tool_exec_duration_seconds_bucket[5m])) by (le, adapter))",
+            "refId": "C",
+            "legendFormat": "p99 {{adapter}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: wayland-owner@example.com\nrunbook: https://repo/runbooks/wayland.md\nalert_id: wayland_latency_high"
+      },
+
+      {
+        "id": 4,
+        "type": "graph",
+        "title": "Wayland Success Rate",
+        "gridPos": {"x": 12, "y": 6, "w": 6, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "100 * (1 - sum(rate(wayland_tool_exec_failures_total[5m])) / sum(rate(wayland_tool_exec_total[5m])))",
+            "refId": "A",
+            "legendFormat": "success_rate"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: wayland-owner@example.com\nrunbook: https://repo/runbooks/wayland.md\nalert_id: wayland_success_rate_low"
+      },
+
+      {
+        "id": 5,
+        "type": "graph",
+        "title": "Caveman Bytes In Out Saved by Tool",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(rate(caveman_bytes_in_total[5m])) by (tool_id)",
+            "refId": "A",
+            "legendFormat": "in {{tool_id}}"
+          },
+          {
+            "expr": "sum(rate(caveman_bytes_out_total[5m])) by (tool_id)",
+            "refId": "B",
+            "legendFormat": "out {{tool_id}}"
+          },
+          {
+            "expr": "sum(rate(caveman_bytes_saved_total[5m])) by (tool_id)",
+            "refId": "C",
+            "legendFormat": "saved {{tool_id}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: caveman-owner@example.com\nrunbook: https://repo/runbooks/caveman.md\nalert_id: caveman_budget_exhausted"
+      },
+
+      {
+        "id": 6,
+        "type": "graph",
+        "title": "Caveman Compression Ratio",
+        "gridPos": {"x": 12, "y": 12, "w": 6, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(caveman_bytes_out_total) / sum(caveman_bytes_in_total)",
+            "refId": "A",
+            "legendFormat": "global_ratio"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: caveman-owner@example.com\nrunbook: https://repo/runbooks/caveman.md\nalert_id: caveman_ratio_drop"
+      },
+
+      {
+        "id": 7,
+        "type": "table",
+        "title": "Caveman Profile Usage",
+        "gridPos": {"x": 0, "y": 18, "w": 6, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(caveman_profile_usage_total) by (profile, tool_id)",
+            "refId": "A",
+            "legendFormat": "{{profile}} - {{tool_id}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: caveman-owner@example.com\nrunbook: https://repo/runbooks/caveman.md\nalert_id: caveman_profile_exhausted"
+      },
+
+      {
+        "id": 8,
+        "type": "graph",
+        "title": "Governance Decisions Allowed vs Denied",
+        "gridPos": {"x": 6, "y": 18, "w": 12, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(rate(governance_decision_allowed_total[5m])) by (tool_id)",
+            "refId": "A",
+            "legendFormat": "allowed {{tool_id}}"
+          },
+          {
+            "expr": "sum(rate(governance_decision_denied_total[5m])) by (reason)",
+            "refId": "B",
+            "legendFormat": "denied {{reason}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: governance-owner@example.com\nrunbook: https://repo/runbooks/governance.md\nalert_id: governance_denials_spike"
+      },
+
+      {
+        "id": 9,
+        "type": "graph",
+        "title": "TorqueQuery Ingestion Rate",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(rate(torque_ingest_bundles_total[1m]))",
+            "refId": "A",
+            "legendFormat": "ingest_rate"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: torque-owner@example.com\nrunbook: https://repo/runbooks/torque.md\nalert_id: torque_ingest_slow"
+      },
+
+      {
+        "id": 10,
+        "type": "stat",
+        "title": "TorqueQuery Dangling Edges",
+        "gridPos": {"x": 12, "y": 24, "w": 6, "h": 6},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "torque_dangling_edges_total",
+            "refId": "A",
+            "legendFormat": "dangling_edges"
+          }
+        ],
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0}]}},
+        "overrides": []},
+        "description": "owner: torque-owner@example.com\nrunbook: https://repo/runbooks/torque.md\nalert_id: torque_dangling_edges"
+      },
+
+      {
+        "id": 11,
+        "type": "table",
+        "title": "Agent Roster and Health",
+        "gridPos": {"x": 0, "y": 30, "w": 18, "h": 8},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "max_over_time(agent_heartbeat_timestamp[5m]) by (agent_id)",
+            "refId": "A",
+            "legendFormat": "heartbeat {{agent_id}}"
+          },
+          {
+            "expr": "agent_restart_count_total by (agent_id)",
+            "refId": "B",
+            "legendFormat": "restarts {{agent_id}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: ops-team@example.com\nrunbook: https://repo/runbooks/agents.md\nalert_id: agent_down"
+      },
+
+      {
+        "id": 12,
+        "type": "logs",
+        "title": "Recent Critical Logs and Policy Violations",
+        "gridPos": {"x": 18, "y": 30, "w": 6, "h": 8},
+        "datasource": "${DS_LOKI}",
+        "targets": [
+          {
+            "expr": "{job=\"cic\"} |= \"ERROR\" or |= \"policy_denied\"",
+            "refId": "A"
+          }
+        ],
+        "description": "owner: ops-team@example.com\nrunbook: https://repo/runbooks/logs.md\nalert_id: critical_logs"
+      },
+
+      {
+        "id": 13,
+        "type": "stat",
+        "title": "Caveman Total Bytes Saved Session",
+        "gridPos": {"x": 0, "y": 38, "w": 6, "h": 4},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "caveman_total_bytes_saved_session",
+            "refId": "A",
+            "legendFormat": "bytes_saved_session"
+          }
+        ],
+        "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": []},
+        "overrides": []},
+        "description": "owner: caveman-owner@example.com\nrunbook: https://repo/runbooks/caveman.md\nalert_id: caveman_session_total"
+      },
+
+      {
+        "id": 14,
+        "type": "graph",
+        "title": "Claude Code Skill Activity",
+        "gridPos": {"x": 6, "y": 38, "w": 6, "h": 4},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(rate(claude_code_skill_calls_total[5m])) by (status)",
+            "refId": "A",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: claude-owner@example.com\nrunbook: https://repo/runbooks/claude.md\nalert_id: claude_code_errors"
+      },
+
+      {
+        "id": 15,
+        "type": "graph",
+        "title": "MCP Proxy Requests and Latency",
+        "gridPos": {"x": 12, "y": 38, "w": 12, "h": 4},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "sum(rate(mcp_proxy_requests_total[1m])) by (status)",
+            "refId": "A",
+            "legendFormat": "{{status}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(mcp_proxy_request_duration_seconds_bucket[5m])) by (le))",
+            "refId": "B",
+            "legendFormat": "p95"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: mcp-owner@example.com\nrunbook: https://repo/runbooks/mcp.md\nalert_id: mcp_latency_high"
+      },
+
+      {
+        "id": 16,
+        "type": "table",
+        "title": "Test Suite Status",
+        "gridPos": {"x": 0, "y": 42, "w": 12, "h": 4},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "test_suite_passed_total",
+            "refId": "A",
+            "legendFormat": "passed"
+          },
+          {
+            "expr": "test_suite_failed_total",
+            "refId": "B",
+            "legendFormat": "failed"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: ci-owner@example.com\nrunbook: https://repo/runbooks/tests.md\nalert_id: test_suite_failed"
+      },
+
+      {
+        "id": 17,
+        "type": "table",
+        "title": "Docs and Commits",
+        "gridPos": {"x": 12, "y": 42, "w": 12, "h": 4},
+        "datasource": "${DS_PROMETHEUS}",
+        "targets": [
+          {
+            "expr": "cic_docs_last_updated_timestamp",
+            "refId": "A",
+            "legendFormat": "docs_updated"
+          },
+          {
+            "expr": "cic_latest_commit_info",
+            "refId": "B",
+            "legendFormat": "latest_commit"
+          }
+        ],
+        "fieldConfig": {"defaults": {}, "overrides": []},
+        "description": "owner: docs-owner@example.com\nrunbook: https://repo/runbooks/docs.md\nalert_id: docs_stale"
+      }
+    ],
+    "annotations": {
+      "list": [
+        {
+          "name": "dashboard_owner",
+          "enabled": true,
+          "datasource": "${DS_PROMETHEUS}",
+          "iconColor": "rgba(255, 96, 96, 1)",
+          "text": "owner: ops-team@example.com"
+        }
+      ]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "DS_PROMETHEUS",
+          "type": "datasource",
+          "datasourceUid": "prometheus",
+          "current": {"value": "Prometheus", "text": "Prometheus"}
+        },
+        {
+          "name": "DS_LOKI",
+          "type": "datasource",
+          "datasourceUid": "loki",
+          "current": {"value": "Loki", "text": "Loki"}
+        },
+        {
+          "name": "adapter",
+          "type": "query",
+          "datasource": "${DS_PROMETHEUS}",
+          "query": "label_values(wayland_tool_exec_total, adapter)",
+          "refresh": 2
+        }
+      ]
+    },
+    "refresh": "15s",
+    "schemaVersion": 30,
+    "version": 1,
+    "links": [
+      {
+        "title": "CIC Runbooks",
+        "url": "https://repo/runbooks",
+        "type": "link"
+      },
+      {
+        "title": "CIC Repository",
+        "url": "https://github.com/sorensencc-dotcom/CIC",
+        "type": "link"
+      }
+    ]
+  },
+  "overwrite": true
+}
