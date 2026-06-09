@@ -401,5 +401,40 @@
       }
     ]
   },
-  "overwrite": true
+  "overwrite": true,
+  "_guardrails": {
+    "canonical_dashboard": true,
+    "enforced_since": "2026-06-09",
+    "policies": [
+      "observability_mandate: only CIC_SYSTEM_OVERVIEW.json is canonical dashboard",
+      "workflow_mandate: all pipelines must use ForgeFlow or Wayland executors",
+      "ownership_mandate: every workflow + alert must have named owner + runbook"
+    ],
+    "panel_ownership": {
+      "1": "ops-team@example.com",
+      "2": "wayland-owner@example.com",
+      "3": "wayland-owner@example.com",
+      "4": "wayland-owner@example.com",
+      "5": "caveman-owner@example.com",
+      "6": "caveman-owner@example.com",
+      "7": "caveman-owner@example.com",
+      "8": "governance-owner@example.com",
+      "9": "torque-owner@example.com",
+      "10": "torque-owner@example.com",
+      "11": "ops-team@example.com",
+      "12": "ops-team@example.com",
+      "13": "caveman-owner@example.com",
+      "14": "claude-owner@example.com",
+      "15": "mcp-owner@example.com",
+      "16": "ci-owner@example.com",
+      "17": "docs-owner@example.com"
+    },
+    "ci_validation": {
+      "lint_dashboard": true,
+      "validate_workflows": true,
+      "check_ownership": true,
+      "enforce_guardrails": true
+    },
+    "note": "This dashboard is the single source of truth for CIC system state. Custom dashboards forbidden. Exception process: file issue + 2-owner approval."
+  }
 }
