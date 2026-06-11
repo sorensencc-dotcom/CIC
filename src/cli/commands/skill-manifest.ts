@@ -29,24 +29,47 @@ export function createManifestCommand(
     .description("Register a skill from a GitHub repository")
     .action(async (repoUrl, skillId, options) => {
       try {
-        // Validate inputs
-        if (!repoUrl.includes("github.com")) {
-          console.error("❌ Only GitHub repos supported in MVP (Phase 28a.2)");
-          process.exit(1);
+        // Validate skill-id format (alphanumeric + dash/underscore only)
+        if (!/^[a-z0-9\-_]+$/.test(skillId)) {
+          throw new Error(
+            "Invalid skill-id. Use lowercase letters, numbers, dash, underscore only."
+          );
+        }
+
+        // Validate GitHub URL using URL.parse()
+        let repoHost: string;
+        try {
+          const url = new URL(repoUrl);
+          repoHost = url.hostname;
+          if (!repoHost.includes("github.com")) {
+            throw new Error("Not a GitHub URL");
+          }
+        } catch {
+          throw new Error(
+            `Invalid GitHub URL: ${repoUrl}. Expected: https://github.com/owner/repo`
+          );
         }
 
         // Infer remote path if not provided
         let remotePath = options.remotePath;
         if (!remotePath) {
-          // Default: skills/{skill-id}.md or {skill-id}.md
           remotePath = `skills/${skillId}.md`;
         }
 
-        // Infer local path
-        const localPath = path.join(os.homedir(), ".claude", "skills", `${skillId}.md`);
+        // Construct and validate local path (must be under ~/.claude/skills/)
+        const skillsDir = path.join(os.homedir(), ".claude", "skills");
+        const localPath = path.join(skillsDir, `${skillId}.md`);
 
-        // For MVP, we don't have real Git access, so use placeholder
-        const lastSyncCommit = "00000000000000000000000000000000000000000"; // placeholder
+        // Ensure localPath doesn't escape skillsDir (path traversal check)
+        const resolvedPath = path.resolve(localPath);
+        const resolvedSkillsDir = path.resolve(skillsDir);
+        if (!resolvedPath.startsWith(resolvedSkillsDir)) {
+          throw new Error(
+            `Path traversal detected. Local path must be under ${skillsDir}`
+          );
+        }
+
+        const lastSyncCommit = "00000000000000000000000000000000000000000";
 
         const entry: SkillManifestEntry = {
           id: skillId,
@@ -62,20 +85,22 @@ export function createManifestCommand(
           localModified: false,
         };
 
-        // Register in database
         const record = await manifestService.registerSkill(entry);
 
         console.log("✅ Skill registered successfully!");
         console.log(`   ID: ${record.skill_id}`);
         console.log(`   Local: ${record.local_path}`);
-        console.log(`   Remote: ${record.source_repo_url}/blob/${record.source_repo_branch}/${record.source_repo_path}`);
+        console.log(
+          `   Remote: ${record.source_repo_url}/blob/${record.source_repo_branch}/${record.source_repo_path}`
+        );
         console.log("\nNext steps:");
         console.log(`  1. Save skill file to: ${localPath}`);
-        console.log("  2. Run: /skill-check-upstream");
-        console.log("  3. Run: /skill-contribute <skill-id> (if changes detected)");
+        console.log("  2. Run: /skill-manifest diff ${skillId}");
+        console.log("  3. Run: /skill-manifest diff ${skillId} --show-patch");
       } catch (error) {
-        console.error("❌ Registration failed:", error);
-        process.exit(1);
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Validation error: ${msg}`);
+        throw error;
       }
     });
 
@@ -118,8 +143,9 @@ export function createManifestCommand(
           console.log(`${id} | ${s} | ${m} | ${updated}`);
         }
       } catch (error) {
-        console.error("❌ List failed:", error);
-        process.exit(1);
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ List failed: ${msg}`);
+        throw error;
       }
     });
 
@@ -132,8 +158,7 @@ export function createManifestCommand(
         const skill = await manifestService.getSkillById(skillId);
 
         if (!skill) {
-          console.error(`❌ Skill not found: ${skillId}`);
-          process.exit(1);
+          throw new Error(`Skill not found: ${skillId}`);
         }
 
         console.log(`\n📖 Skill: ${skill.skill_name}`);
@@ -149,8 +174,9 @@ export function createManifestCommand(
         console.log(`Created:         ${new Date(skill.created_at).toISOString()}`);
         console.log(`Updated:         ${new Date(skill.updated_at).toISOString()}`);
       } catch (error) {
-        console.error("❌ View failed:", error);
-        process.exit(1);
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`❌ View failed: ${msg}`);
+        throw error;
       }
     });
 
@@ -167,10 +193,9 @@ export function createManifestCommand(
         try {
           // Validate skill-id format
           if (!/^[a-z0-9\-_]+$/.test(skillId)) {
-            console.error(
-              "❌ Invalid skill-id. Use lowercase letters, numbers, dash, underscore only."
+            throw new Error(
+              "Invalid skill-id. Use lowercase letters, numbers, dash, underscore only."
             );
-            process.exit(1);
           }
 
           console.log(`📊 Detecting changes for: ${skillId}`);
@@ -178,10 +203,9 @@ export function createManifestCommand(
 
           // Handle error statuses
           if (result.summary.status === "not-found") {
-            console.error(
-              `❌ Skill not found in manifest. Register with: /skill-manifest register <url> ${skillId}`
+            throw new Error(
+              `Skill not found in manifest. Register with: /skill-manifest register <url> ${skillId}`
             );
-            process.exit(1);
           }
 
           if (result.summary.status === "network-fail") {
@@ -192,8 +216,9 @@ export function createManifestCommand(
           }
 
           if (result.summary.status === "error") {
-            console.error(`❌ Detection error: ${result.summary.errorMessage}`);
-            process.exit(1);
+            throw new Error(
+              `Detection error: ${result.summary.errorMessage}`
+            );
           }
 
           // Display results
@@ -214,13 +239,11 @@ export function createManifestCommand(
               console.log("=".repeat(60) + "\n");
             }
           }
-
-          process.exit(0);
         } catch (error) {
           const msg =
             error instanceof Error ? error.message : String(error);
-          console.error(`❌ Command error: ${msg}`);
-          process.exit(1);
+          console.error(`❌ Error: ${msg}`);
+          throw error;
         }
       });
   }
