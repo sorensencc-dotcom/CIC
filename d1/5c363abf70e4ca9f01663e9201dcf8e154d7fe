@@ -1,0 +1,28 @@
+src/cli/commands/skill-contribute.ts
+  s_23364b39b23e42::t_528ae9543ca52a 1-90
+src/governance/models/index.ts
+  s_23364b39b23e42::t_c8311b6ac6f121 234-268
+src/governance/services/contribution-agent.ts
+  s_23364b39b23e42::t_6f66d7f70f07eb 1-513
+src/governance/services/contribution-agent.test.ts
+  s_23364b39b23e42::t_929f80d27c810e 1-287
+src/cli/commands/skill-manifest.ts
+  s_23364b39b23e42::t_ae0e89321bbf5f 1,4,9
+  s_23364b39b23e42::t_529cd99bd69f4a 253-323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "d15c363abf70e4ca9f01663e9201dcf8e154d7fe",
+  "prompts": {},
+  "sessions": {
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
