@@ -1,10 +1,12 @@
-// SCP CLI Command - Phase 28a.2 + 28a.3
+// SCP CLI Command - Phase 28a.2 + 28a.3 + 28a.4
 // /skill-manifest register <repo-url> <skill-id> [--remote-path <path>]
 // /skill-manifest diff <skill-id> [--summary|--show-patch]
+// /skill-manifest contribute <skill-id>
 
 import { Command } from "commander";
 import { ManifestService } from "../../governance/services/manifest-service";
 import { ChangeDetectionService } from "../../governance/services/change-detection-service";
+import { ContributionAgent } from "../../governance/services/contribution-agent";
 import { SkillManifestEntry } from "../../governance/models";
 import { Database } from "../../governance/db";
 import * as path from "path";
@@ -239,6 +241,77 @@ export function createManifestCommand(
               console.log("=".repeat(60) + "\n");
             }
           }
+        } catch (error) {
+          const msg =
+            error instanceof Error ? error.message : String(error);
+          console.error(`❌ Error: ${msg}`);
+          throw error;
+        }
+      });
+  }
+
+  // Contribute subcommand (Phase 28a.4)
+  if (options?.db) {
+    const changeDetection = new ChangeDetectionService(options.db);
+    const contributor = new ContributionAgent(options.db);
+
+    cmd
+      .command("contribute <skill-id>")
+      .description("Create PR from detected changes")
+      .action(async (skillId) => {
+        try {
+          // Validate skill-id format
+          if (!/^[a-z0-9\-_]+$/.test(skillId)) {
+            throw new Error(
+              "Invalid skill-id. Use lowercase letters, numbers, dash, underscore only."
+            );
+          }
+
+          console.log(`📤 Creating PR for: ${skillId}`);
+
+          // Fetch skill manifest
+          const skill = await manifestService.getSkillById(skillId);
+          if (!skill) {
+            throw new Error(
+              `Skill not found: ${skillId}. Register with: /skill-manifest register <url> ${skillId}`
+            );
+          }
+
+          console.log(`   Skill: ${skill.skill_name}`);
+
+          // Detect changes
+          console.log(`   Checking for changes...`);
+          const diffResult = await changeDetection.detectChanges(skillId);
+
+          if (!diffResult.hasChanges) {
+            console.log("   ℹ️  No changes detected. Skipping PR creation.");
+            return;
+          }
+
+          console.log(
+            `   ✓ Changes found: ${diffResult.summary.linesAdded} added, ${diffResult.summary.linesDeleted} deleted`
+          );
+
+          // Create PR
+          console.log(`   Creating PR...`);
+          const prResult = await contributor.createPullRequest({
+            skillId,
+            skillName: skill.skill_name,
+            upstreamRepoUrl: skill.source_repo_url,
+            upstreamBranch: skill.source_repo_branch,
+            localFilePath: skill.local_path,
+            diffSummary: diffResult.summary,
+          });
+
+          console.log(`\n✅ PR Created!\n`);
+          console.log(`   PR #${prResult.prNumber}`);
+          console.log(`   URL: ${prResult.prUrl}`);
+          console.log(`   Branch: ${prResult.prBranch}`);
+          console.log(`   Status: ${prResult.status}`);
+          console.log(`   Commit: ${prResult.commitSha.slice(0, 7)}\n`);
+          console.log(
+            `Next: Check PR status with: /skill-manifest status ${skillId}`
+          );
         } catch (error) {
           const msg =
             error instanceof Error ? error.message : String(error);

@@ -231,3 +231,38 @@ export interface DiffResult {
   remoteChecksum?: string;
   detectedAt: ISO8601;
 }
+
+// ============================================================================
+// SCP Phase 28a.4: Contribution Agent Types
+// ============================================================================
+
+export interface PRCreationRequest {
+  skillId: string;
+  skillName: string;
+  upstreamRepoUrl: string;
+  upstreamBranch: string;
+  localFilePath: string;
+  diffSummary: DiffSummary;
+  commitMessage?: string;
+  prTitle?: string;
+  prDescription?: string;
+}
+
+export interface PRCreationResult {
+  skillId: string;
+  prNumber: number;
+  prUrl: string;
+  prBranch: string;
+  commitSha: string;
+  createdAt: ISO8601;
+  status: "open" | "draft";
+}
+
+export interface GitHubContributionMetadata {
+  owner: string;
+  repo: string;
+  branch: string;
+  commitMessage: string;
+  prTitle: string;
+  prDescription: string;
+}
