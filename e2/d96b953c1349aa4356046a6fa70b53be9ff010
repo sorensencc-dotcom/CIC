@@ -1,0 +1,29 @@
+src/governance/services/scp-governance-bridge.ts
+  s_23364b39b23e42::t_051e582c8e28b7 1-14,16-20,23,32,34,47,56-126,128-133,140,155-156
+  s_23364b39b23e42::t_ae189aeaca96d8 15,21-22,24-31,33,35-46,48-55
+  s_23364b39b23e42::t_219aa5a718d858 127,134-139,141-154
+src/governance/services/manifest-service.test.ts
+  s_23364b39b23e42::t_14702c96ec7b0f 1-170,268
+  s_23364b39b23e42::t_433f2f8cb32459 171-267
+src/cli/commands/skill-manifest.ts
+  s_23364b39b23e42::t_b0925a5cdf6fe3 196-197,206-207,219-221,245-246
+  s_23364b39b23e42::t_5e970b90a5a359 177-179
+  s_23364b39b23e42::t_8cd1748846c583 146-148,161
+  s_23364b39b23e42::t_f9810967614830 32-50,59-70,72,93-95,98-99,101-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "e2d96b953c1349aa4356046a6fa70b53be9ff010",
+  "prompts": {},
+  "sessions": {
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
