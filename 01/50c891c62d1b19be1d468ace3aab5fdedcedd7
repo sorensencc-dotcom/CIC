@@ -1,0 +1,39 @@
+src/build-system/__tests__/graph-engine.test.ts
+  s_23364b39b23e42::t_2ee39259f227e7 1-135
+src/build-system/__tests__/lineage-registry.test.ts
+  s_23364b39b23e42::t_bb63dd4596aeb0 1-144
+src/build-system/drift-detector.ts
+  s_23364b39b23e42::t_8f5561d4375d52 1-103
+src/build-system/types.ts
+  s_23364b39b23e42::t_149750dca14e71 1-83
+src/build-system/lineage-registry.ts
+  s_23364b39b23e42::t_d44fd597ff31d8 1-135
+src/build-system/routing-engine.ts
+  s_23364b39b23e42::t_21ed328d3dda6e 1-75
+src/build-system/__tests__/drift-detector.test.ts
+  s_23364b39b23e42::t_57fd12d561adf0 1-123,126,132-133,135-148
+  s_23364b39b23e42::t_5b7fd29487cb18 125,127-129
+  s_23364b39b23e42::t_f488ada7a35a74 124,130-131,134
+src/build-system/__tests__/routing-engine.test.ts
+  s_23364b39b23e42::t_9fbb453bb3d6ab 1-111
+src/build-system/graph-engine.ts
+  s_23364b39b23e42::t_d897825c9780b3 1-83,85-134,145-259
+  s_23364b39b23e42::t_103149f70ac352 84
+  s_23364b39b23e42::t_ef4b0d95303a5b 135-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0150c891c62d1b19be1d468ace3aab5fdedcedd7",
+  "prompts": {},
+  "sessions": {
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
