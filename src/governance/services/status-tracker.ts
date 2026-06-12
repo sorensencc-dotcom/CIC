@@ -72,20 +72,32 @@ export class StatusTracker {
       }
 
       // Fetch review state
-      const reviewState = await this.getReviewStateWithRetry(
-        owner,
-        repo,
-        prNumber,
-        skillId
-      );
+      let reviewState: ReviewState;
+      try {
+        reviewState = await this.getReviewStateWithRetry(
+          owner,
+          repo,
+          prNumber,
+          skillId
+        );
+      } catch (error) {
+        // Don't cache if review fetch fails mid-call
+        throw error;
+      }
 
       // Fetch commit status
-      const commitStatus = await this.getCommitStatusWithRetry(
-        owner,
-        repo,
-        pr.head?.sha || "",
-        skillId
-      );
+      let commitStatus: any;
+      try {
+        commitStatus = await this.getCommitStatusWithRetry(
+          owner,
+          repo,
+          pr.head?.sha || "",
+          skillId
+        );
+      } catch (error) {
+        // Don't cache if commit status fetch fails mid-call
+        throw error;
+      }
 
       const snapshot: PRStatusSnapshot = {
         prNumber,
@@ -97,7 +109,7 @@ export class StatusTracker {
         checkedCount: 1,
       };
 
-      // Cache result
+      // Cache only after all 3 API calls succeeded
       this.statusCache.set(cacheKey, {
         snapshot,
         timestamp: Date.now(),
@@ -188,8 +200,6 @@ export class StatusTracker {
         }
       }
     }
-
-    throw new Error("Max retries exceeded");
   }
 
   // Get review state from PR reviews
@@ -209,14 +219,19 @@ export class StatusTracker {
           null
         );
 
-        // Determine state from reviews (last review wins)
+        // Determine state from reviews (track latest APPROVED/CHANGES_REQUESTED)
         let state: ReviewState = "none";
         if (Array.isArray(reviews) && reviews.length > 0) {
-          const lastReview = reviews[reviews.length - 1];
-          if (lastReview.state === "APPROVED") state = "approved";
-          else if (lastReview.state === "CHANGES_REQUESTED")
-            state = "changes-requested";
-          else if (lastReview.state === "COMMENTED") state = "pending";
+          // Iterate to find latest state, not assuming chronological order
+          for (const review of reviews) {
+            if (review.state === "APPROVED") state = "approved";
+            else if (review.state === "CHANGES_REQUESTED") state = "changes-requested";
+          }
+          // If no approval/rejection, check for comments
+          if (state === "none") {
+            const hasComments = reviews.some((r) => r.state === "COMMENTED");
+            if (hasComments) state = "pending";
+          }
         }
 
         return state;
@@ -316,9 +331,16 @@ export class StatusTracker {
       FROM skill_contributions
       WHERE skill_id = ? AND status IN ('open', 'draft')
       ORDER BY created_at DESC
-      LIMIT 50
+      LIMIT 51
     `;
-    return this.db.query(query, [skillId]);
+    const results = await this.db.query(query, [skillId]);
+
+    if (results.length >= 51) {
+      log(skillId, 0, `⚠️  Skill has 51+ open PRs. Checking only first 50 (pagination needed)`);
+      return results.slice(0, 50);
+    }
+
+    return results;
   }
 
   // Parse repository URL
@@ -362,6 +384,11 @@ export class StatusTracker {
         res.on("data", (chunk: Buffer) => (data += chunk.toString()));
         res.on("end", () => {
           try {
+            // Prevent unbounded JSON parsing (10MB max)
+            if (data.length > 10 * 1024 * 1024) {
+              reject(new Error("Response too large (>10MB)"));
+              return;
+            }
             const json = JSON.parse(data);
 
             // Handle rate limit (before other 4xx errors)
