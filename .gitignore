@@ -1,0 +1,26 @@
+# System state
+.ijfw/
+.claude/
+.vscode/
+.idea/
+
+# Build & test artifacts
+node_modules/
+dist/
+build/
+coverage/
+*.log
+eval/
+safety/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

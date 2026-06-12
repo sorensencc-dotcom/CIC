@@ -1,0 +1,58 @@
+apiVersion: cic/v1
+kind: AutonomyBoundary
+metadata:
+  name: cic-autonomy-boundary
+spec:
+  allowedWithoutApproval:
+
+    evaluation:
+      - runModelEvaluationHarness
+      - runReplayHarness
+      - runDriftEngine
+      - generateEvaluationReports
+      - updateInternalMetrics
+      - refreshBaselinesWhenStable
+
+    safety:
+      - enforceSandbox
+      - runSafetyFuzzer
+      - quarantineUnsafeOutputs
+      - blockForbiddenToolCalls
+
+    lifecycle:
+      - transition: evaluation → canary
+      - transition: canary → evaluation (rollback)
+      - updateLifecycleStatus
+
+    selfHealing:
+      - autoRollbackOnHighDrift
+      - autoRollbackOnRegression
+      - autoRollbackOnGoldenTaskFailure
+
+  forbiddenWithoutApproval:
+
+    modelChanges:
+      - modifyGovernanceManifest
+      - modifyAutonomyBoundary
+      - modifyDriftThresholds
+      - modifySafetySandboxRules
+      - modifyLifecycleStages
+
+    systemChanges:
+      - modifyRouterLogic
+      - modifyToolSchemas
+      - modifyAgentPrompts
+      - modifyAgentPolicies
+
+    externalActions:
+      - networkAccess
+      - filesystemWritesOutsideRepo
+      - modifyingOperatorData
+      - modifyingUserCodeWithoutExplicitTask
+
+  operatorOverrides:
+    - freezeAutonomy
+    - forcePromotion
+    - forceRollback
+    - overrideDriftThresholds
+    - overrideLifecycleStage
