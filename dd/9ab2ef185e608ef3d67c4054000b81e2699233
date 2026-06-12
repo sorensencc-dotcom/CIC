@@ -1,0 +1,21 @@
+src/governance/services/status-tracker.ts
+  s_23364b39b23e42::t_c53bfa936e6cb3 339-344
+  s_23364b39b23e42::t_276052f18a95a9 86
+  s_23364b39b23e42::t_9d6492afe3af3d 367,377-379
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "dd9ab2ef185e608ef3d67c4054000b81e2699233",
+  "prompts": {},
+  "sessions": {
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
