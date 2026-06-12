@@ -266,3 +266,29 @@ export interface GitHubContributionMetadata {
   prTitle: string;
   prDescription: string;
 }
+
+// ============================================================================
+// SCP Phase 28a.5: Status Tracker Types
+// ============================================================================
+
+export type ReviewState = "approved" | "changes-requested" | "pending" | "none";
+
+export interface PRStatusSnapshot {
+  prNumber: number;
+  status: "open" | "merged" | "closed" | "draft";
+  reviewState: ReviewState;
+  reviewComments: number;
+  commitStatus?: "pending" | "success" | "failure";
+  lastCheckedAt: ISO8601;
+  checkedCount: number;
+}
+
+export interface PRStatusUpdate {
+  skillId: string;
+  prNumber: number;
+  status: "open" | "merged" | "closed" | "draft";
+  reviewState: ReviewState;
+  reviewComments: number;
+  commitStatus?: string;
+  lastCheckedAt: ISO8601;
+}
