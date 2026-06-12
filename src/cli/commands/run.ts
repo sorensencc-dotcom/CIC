@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { TextSegment, PostProcessorConfig } from "../../interfaces/postprocessor";
-import { HumanizerPostProcessor } from "../../postprocessors/humanizer";
+import { HumanizerPostProcessor } from "../../postprocessors/humanizer/index";
 import { PipelineFactory } from "../../pipeline";
 import { HarvesterStage } from "../../stages/harvester";
 import { AuditorStage } from "../../stages/auditor";

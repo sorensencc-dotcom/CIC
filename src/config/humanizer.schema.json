@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Humanizer PostProcessor Configuration",
+  "type": "object",
+  "required": ["enabled"],
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Enable or disable Humanizer PostProcessor"
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["default", "rewrite-labs", "custom"],
+      "default": "default",
+      "description": "Profile to use: default (Tier 1), rewrite-labs (Tier 1+2), or custom"
+    },
+    "ruleTiers": {
+      "type": "object",
+      "description": "For custom profile: which rule tiers to enable",
+      "properties": {
+        "tier1": { "type": "boolean" },
+        "tier2": { "type": "boolean" },
+        "tier3": { "type": "boolean" }
+      }
+    },
+    "voiceCalibration": {
+      "type": "object",
+      "description": "Voice preservation settings",
+      "properties": {
+        "preserve": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Styles to preserve (e.g., casual, technical)"
+        },
+        "amplify": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Styles to amplify"
+        }
+      }
+    },
+    "dryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "Record edits but don't apply to content"
+    },
+    "confidenceThresholds": {
+      "type": "object",
+      "properties": {
+        "apply": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "description": "Minimum confidence for applying edits"
+        },
+        "report": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5,
+          "description": "Minimum confidence for reporting edits"
+        }
+      }
+    }
+  }
+}

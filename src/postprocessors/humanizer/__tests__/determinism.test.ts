@@ -1,4 +1,4 @@
-import { HumanizerPostProcessor } from "../humanizer";
+import { HumanizerPostProcessor } from "../index";
 import { PostProcessorConfig, TextSegment } from "../../../interfaces/postprocessor";
 
 describe("Humanizer Determinism Verification", () => {

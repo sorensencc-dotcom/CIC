@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import fetch from 'node-fetch';
+// Use built-in fetch (Node 20+)
 
 const ORCHESTRATOR_URL = process.env.BUILD_ORCHESTRATOR_URL || 'http://localhost:3100';
 
@@ -44,7 +44,7 @@ buildCommand
   .action(async (buildId) => {
     try {
       const response = await fetch(`${ORCHESTRATOR_URL}/builds/${buildId}`);
-      const status = await response.json();
+      const status = await response.json() as any;
 
       if (!response.ok) {
         console.error(`Build not found: ${buildId}`);
@@ -75,7 +75,7 @@ buildCommand
         : `${ORCHESTRATOR_URL}/builds`;
 
       const response = await fetch(url);
-      const builds = await response.json();
+      const builds = await response.json() as any[];
 
       if (!builds || builds.length === 0) {
         console.log('No builds found');
@@ -115,7 +115,7 @@ async function waitForBuild(buildId: string, maxWait = 300000): Promise<void> {
   while (Date.now() - startTime < maxWait) {
     try {
       const response = await fetch(`${ORCHESTRATOR_URL}/builds/${buildId}`);
-      const status = await response.json();
+      const status = await response.json() as any;
 
       if (status.status === 'succeeded') {
         console.log(`✓ Build completed: ${status.build_id}`);
