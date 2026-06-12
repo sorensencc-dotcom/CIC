@@ -1,0 +1,91 @@
+src/pipeline/factory.ts
+  s_0cbf0495b87311::t_5599ff5b0328fa 1-18,23-35
+  s_0cbf0495b87311::t_27824cf1217f7c 19-22
+src/postprocessors/humanizer/index.ts
+  s_0cbf0495b87311::t_3300b22b144423 1-113
+src/postprocessors/humanizer-rules/index.ts
+  s_0cbf0495b87311::t_7631eb6c291804 1-32
+src/postprocessors/humanizer/__tests__/determinism.test.ts
+  s_0cbf0495b87311::t_d56785451c7de1 1
+src/config/humanizer.schema.json
+  s_0cbf0495b87311::t_a8ee4a5c74e29f 1-67
+src/postprocessors/index.ts
+  s_0cbf0495b87311::t_cd9d085957bcd1 2-3
+  s_0cbf0495b87311::t_2e53e3dcb56571 1
+src/cli/index.ts
+  s_23364b39b23e42::t_4e46eeda0b7354 6,23-24,30
+src/stages/auditor.ts
+  s_0cbf0495b87311::t_877d764a5ce85c 1-10
+src/db/index.ts
+  s_23364b39b23e42::t_5ade4e8e6860f8 1-3,10-11,13-19,24-35
+  s_23364b39b23e42::t_7e0f20a55ce99d 6-7
+  s_23364b39b23e42::t_dcba848344093d 20-21
+  s_23364b39b23e42::t_1b28a3e2b6f7eb 4-5,8-9,12,22
+  s_23364b39b23e42::t_c4992c398e124a 23
+src/stages/harvester.ts
+  s_0cbf0495b87311::t_ae16b3ad4c8490 1-10
+src/postprocessors/humanizer-rules/tier2.ts
+  s_0cbf0495b87311::t_551400d891f177 14-20,22-23,40
+  s_0cbf0495b87311::t_34917ed48555ad 97-101,103,105-106,123
+  s_0cbf0495b87311::t_96101aa12aaae9 102
+  s_0cbf0495b87311::t_73e90cda6bcfc6 1-13,21,24-39,41-96,104,107-122,124-185
+src/cli/commands/build.ts
+  s_23364b39b23e42::t_0b881f542dfd5f 2
+  s_23364b39b23e42::t_4d951382d44010 47
+  s_23364b39b23e42::t_e86b6af9ecb35f 118
+  s_23364b39b23e42::t_b15ba2e837b6a9 78
+src/postprocessors/humanizer-rules/tier1.ts
+  s_0cbf0495b87311::t_33f448140aa2d9 11-12,44
+  s_0cbf0495b87311::t_60fe608b2bf1a4 19-20
+  s_0cbf0495b87311::t_39628450ca4925 168,179,186
+  s_0cbf0495b87311::t_5b958277cb2c67 9,14-16,18,21,24-26,28
+  s_0cbf0495b87311::t_5ecea708bc9158 164-167,174
+  s_0cbf0495b87311::t_f01c58bfef1efd 1-8,10,13,17,22-23,27,29-43,45-163,169-173,175-178,180-185,187-238
+src/postprocessors/humanizer.ts
+  s_0cbf0495b87311::t_31505b644d5660 1-28,30-113
+  s_0cbf0495b87311::t_ebc92b42e17430 29
+src/governance/db.ts
+  s_23364b39b23e42::t_12e7920078fc70 20-21
+  s_23364b39b23e42::t_2fcbef4c603ad5 1-3,11,14-16,18-19,24-25,27-34
+  s_23364b39b23e42::t_e00aa10e2a6ff4 10,13,17,26,35
+  s_23364b39b23e42::t_6979be052d9057 6-7
+  s_23364b39b23e42::t_4c719122af507a 4-5,8-9,12,22
+  s_23364b39b23e42::t_7d03ecd7e936cd 23
+smoke-test.ts
+  s_0cbf0495b87311::t_88c3dc491c84aa 1-253
+src/pipeline/types.ts
+  s_0cbf0495b87311::t_1a245306e3711b 1-39
+src/pipeline/index.ts
+  s_23364b39b23e42::t_78ad0dfd2119b7 19-22,30
+  s_23364b39b23e42::t_140cfefd4b7f43 1-18,27-29,31,36-43
+  s_23364b39b23e42::t_1670da72492656 32-35
+  s_23364b39b23e42::t_1064fdb62db27a 23-26
+src/postprocessors/humanizer/__tests__/humanizer.test.ts
+  s_0cbf0495b87311::t_2b2363bc48aba2 1
+src/cli/commands/run.ts
+  s_0cbf0495b87311::t_8aa387c7c8a6f8 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "0a143a0c34344ea934c587fc78c771c470a181cc",
+  "prompts": {},
+  "sessions": {
+    "s_0cbf0495b87311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "feae3ff2-ccdb-4b60-8f92-7e3bc5db2b17",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    },
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
