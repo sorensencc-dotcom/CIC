@@ -83,7 +83,7 @@ export class StatusTracker {
       const commitStatus = await this.getCommitStatusWithRetry(
         owner,
         repo,
-        pr.head.sha,
+        pr.head?.sha || "",
         skillId
       );
 
@@ -336,7 +336,12 @@ export class StatusTracker {
   // GitHub API request
   private async githubRequest(endpoint: string, body: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      const [method, path] = endpoint.split(" ");
+      const parts = endpoint.split(" ");
+      if (parts.length < 2) {
+        reject(new Error(`Invalid endpoint format: ${endpoint}. Expected "METHOD /path"`));
+        return;
+      }
+      const [method, path] = parts;
       const https = require("https");
 
       const options = {
@@ -359,19 +364,19 @@ export class StatusTracker {
           try {
             const json = JSON.parse(data);
 
-            if (res.statusCode >= 400) {
-              const error = new Error(json.message || `HTTP ${res.statusCode}`);
-              (error as any).statusCode = res.statusCode;
-              reject(error);
-              return;
-            }
-
-            // Handle rate limit
+            // Handle rate limit (before other 4xx errors)
             if (res.statusCode === 429) {
               const resetTime = parseInt(res.headers["x-ratelimit-reset"]) * 1000;
               const waitMs = Math.max(0, resetTime - Date.now());
               const error = new Error(`Rate limited. Retry after ${Math.ceil(waitMs / 1000)}s`);
               (error as any).retryAfter = waitMs;
+              reject(error);
+              return;
+            }
+
+            if (res.statusCode >= 400) {
+              const error = new Error(json.message || `HTTP ${res.statusCode}`);
+              (error as any).statusCode = res.statusCode;
               reject(error);
               return;
             }
