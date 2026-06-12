@@ -1,14 +1,17 @@
 // SCP Contribution Agent - Phase 28a.4
 // GitHub PR creation from detected skill changes
 // Features: retry logic, rate limit handling, atomic recording, GitHub API v3
+// Governance: Phase 24.5 integration for skill lineage tracking
 
 import * as fs from "fs";
 import * as path from "path";
 import { Database } from "../db";
+import { SCPGovernanceBridge } from "./scp-governance-bridge";
 import {
   PRCreationRequest,
   PRCreationResult,
   GitHubContributionMetadata,
+  SkillContribution,
   SkillManifestRecord,
   ISO8601,
 } from "../models";
@@ -31,12 +34,14 @@ export class ContributionAgent {
   private retryDelayMs: number;
   private timeoutMs: number;
   private githubToken: string;
+  private governanceBridge: SCPGovernanceBridge;
 
   constructor(private db: Database, config?: ContributionAgentConfig) {
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelayMs = config?.retryDelayMs ?? 2000;
     this.timeoutMs = config?.timeoutMs ?? 30000;
     this.githubToken = config?.githubToken || process.env.GITHUB_TOKEN || "";
+    this.governanceBridge = new SCPGovernanceBridge(db);
 
     if (!this.githubToken) {
       throw new Error("GITHUB_TOKEN environment variable is required");
@@ -112,12 +117,14 @@ export class ContributionAgent {
       );
       log(req.skillId, `Created PR #${prResult.number}`);
 
-      // Record contribution to DB
+      // Record contribution to DB + governance lineage
       await this.recordContributionToDB(
         req.skillId,
+        req.skillName,
         prResult,
         metadata,
-        commitSha
+        commitSha,
+        req.diffSummary
       );
 
       const result: PRCreationResult = {
@@ -461,35 +468,80 @@ export class ContributionAgent {
     });
   }
 
-  // Record contribution to database
+  // Record contribution to database + governance lineage (Phase 24.5)
   private async recordContributionToDB(
     skillId: string,
+    skillName: string,
     prResult: any,
     metadata: GitHubContributionMetadata,
-    commitSha: string
+    commitSha: string,
+    diffSummary: any
   ): Promise<void> {
     try {
       const query = `
         INSERT INTO skill_contributions (
           skill_id, pr_number, pr_url, pr_branch,
           upstream_repo_url, status, contribution_type,
-          change_summary, author, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          change_summary, author, created_at, lines_added, lines_deleted
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
       `;
 
-      await this.db.execute(query, [
+      const result = await this.db.execute(query, [
         skillId,
         prResult.number,
         prResult.html_url,
         metadata.branch,
         `https://github.com/${metadata.owner}/${metadata.repo}`,
         "open",
-        "scp-contribution",
+        "feature", // Default contribution type for SCP
         `${commitSha.slice(0, 7)}`,
         "scp-bot",
+        diffSummary.linesAdded || 0,
+        diffSummary.linesDeleted || 0,
       ]);
 
       log(skillId, "Recorded contribution to database");
+
+      // Record governance event (Phase 24.5 integration)
+      try {
+        const contrib: SkillContribution = {
+          skillId,
+          skillName,
+          prNumber: prResult.number,
+          upstreamRepo: `https://github.com/${metadata.owner}/${metadata.repo}`,
+          prUrl: prResult.html_url,
+          status: "open",
+          createdAt: new Date().toISOString() as ISO8601,
+          lastChecked: new Date().toISOString() as ISO8601,
+          author: "scp-bot",
+          type: "feature",
+          description: `${diffSummary.linesAdded} added, ${diffSummary.linesDeleted} deleted`,
+        };
+
+        // Record submission event in skill_lineage
+        const lineageId = await this.governanceBridge.recordContributionEvent(
+          contrib,
+          "submitted"
+        );
+        log(
+          skillId,
+          `Recorded governance event (lineage #${lineageId}) for PR #${prResult.number}`
+        );
+
+        // Link contribution to lineage record
+        await this.governanceBridge.linkContributionToLineage(
+          skillId,
+          prResult.number,
+          lineageId
+        );
+        log(
+          skillId,
+          `Linked PR #${prResult.number} to skill_lineage #${lineageId}`
+        );
+      } catch (govError) {
+        logError(skillId, "Failed to record governance event", govError);
+        // Non-fatal: contribution already recorded, governance linking is best-effort
+      }
     } catch (error) {
       logError(skillId, "Failed to record contribution", error);
       // Non-fatal: don't throw, just log

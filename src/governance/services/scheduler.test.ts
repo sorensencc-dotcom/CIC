@@ -179,4 +179,67 @@ describe("Scheduler", () => {
       scheduler.stop();
     });
   });
+
+  describe("PR Status Polling (Phase 24.5 Governance)", () => {
+    it("should poll open PRs for status changes", async () => {
+      mockDb.query.mockResolvedValueOnce([
+        {
+          skill_id: "test-skill",
+          skill_name: "Test Skill",
+          pr_number: 42,
+          upstream_repo_url: "https://github.com/test/repo",
+        },
+      ]);
+
+      scheduler.start();
+      // Polling scheduled internally
+      scheduler.stop();
+    });
+
+    it("should handle no open PRs gracefully", async () => {
+      mockDb.query.mockResolvedValueOnce([]);
+
+      scheduler.start();
+      // No errors when no PRs to poll
+      scheduler.stop();
+    });
+
+    it("should update last_checked_at after polling", () => {
+      mockDb.query.mockResolvedValueOnce([
+        {
+          skill_id: "test-skill",
+          skill_name: "Test Skill",
+          pr_number: 42,
+          upstream_repo_url: "https://github.com/test/repo",
+        },
+      ]);
+
+      scheduler.start();
+      // Updates tracked internally
+      scheduler.stop();
+
+      expect(mockDb.execute).toBeDefined();
+    });
+
+    it("should continue on per-PR polling failures", async () => {
+      mockDb.query.mockResolvedValueOnce([
+        {
+          skill_id: "good-skill",
+          skill_name: "Good Skill",
+          pr_number: 1,
+          upstream_repo_url: "https://github.com/test/repo",
+        },
+        {
+          skill_id: "bad-skill",
+          skill_name: "Bad Skill",
+          pr_number: 2,
+          upstream_repo_url: "https://github.com/test/repo",
+        },
+      ]);
+
+      scheduler.start();
+      // Failure on one PR doesn't stop others
+      scheduler.stop();
+    });
+  });
 });

@@ -391,4 +391,159 @@ describe("StatusTracker", () => {
       }).toThrow("GITHUB_TOKEN");
     });
   });
+
+  describe("checkAndUpdatePRStatus - Governance Integration (Phase 24.5)", () => {
+    it("should record governance event when PR merged", async () => {
+      // Mock database queries
+      mockDb.query.mockResolvedValueOnce([{ status: "open" }]); // Get previous status
+
+      jest.spyOn(tracker as any, "checkPRStatus").mockResolvedValueOnce({
+        prNumber: 42,
+        status: "merged",
+        reviewState: "approved",
+        reviewComments: 1,
+        commitStatus: "success",
+        lastCheckedAt: new Date().toISOString(),
+        checkedCount: 1,
+      });
+
+      const governanceSpy = jest.spyOn(
+        (tracker as any).governanceBridge,
+        "recordContributionEvent"
+      );
+      governanceSpy.mockResolvedValueOnce(100); // Mock lineageId
+
+      const linkSpy = jest.spyOn(
+        (tracker as any).governanceBridge,
+        "linkContributionToLineage"
+      );
+      linkSpy.mockResolvedValueOnce(undefined);
+
+      const result = await tracker.checkAndUpdatePRStatus(
+        "test-skill",
+        42,
+        "https://github.com/anthropics/claude-skills",
+        "Test Skill"
+      );
+
+      expect(result.status).toBe("merged");
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE skill_contributions SET status"),
+        ["merged", "test-skill", 42]
+      );
+      expect(governanceSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skillId: "test-skill",
+          prNumber: 42,
+          status: "merged",
+        }),
+        "merged"
+      );
+      expect(linkSpy).toHaveBeenCalledWith("test-skill", 42, 100);
+    });
+
+    it("should record governance event when PR closed", async () => {
+      mockDb.query.mockResolvedValueOnce([{ status: "open" }]);
+
+      jest.spyOn(tracker as any, "checkPRStatus").mockResolvedValueOnce({
+        prNumber: 42,
+        status: "closed",
+        reviewState: "pending",
+        reviewComments: 0,
+        commitStatus: "failure",
+        lastCheckedAt: new Date().toISOString(),
+        checkedCount: 1,
+      });
+
+      const governanceSpy = jest.spyOn(
+        (tracker as any).governanceBridge,
+        "recordContributionEvent"
+      );
+      governanceSpy.mockResolvedValueOnce(101);
+
+      const linkSpy = jest.spyOn(
+        (tracker as any).governanceBridge,
+        "linkContributionToLineage"
+      );
+      linkSpy.mockResolvedValueOnce(undefined);
+
+      const result = await tracker.checkAndUpdatePRStatus(
+        "test-skill",
+        42,
+        "https://github.com/anthropics/claude-skills",
+        "Test Skill"
+      );
+
+      expect(result.status).toBe("closed");
+      expect(mockDb.execute).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE skill_contributions SET status"),
+        ["closed", "test-skill", 42]
+      );
+      expect(governanceSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "closed" }),
+        "closed"
+      );
+    });
+
+    it("should handle governance event recording failures gracefully", async () => {
+      mockDb.query.mockResolvedValueOnce([{ status: "open" }]);
+
+      jest.spyOn(tracker as any, "checkPRStatus").mockResolvedValueOnce({
+        prNumber: 42,
+        status: "merged",
+        reviewState: "approved",
+        reviewComments: 1,
+        commitStatus: "success",
+        lastCheckedAt: new Date().toISOString(),
+        checkedCount: 1,
+      });
+
+      const governanceSpy = jest.spyOn(
+        (tracker as any).governanceBridge,
+        "recordContributionEvent"
+      );
+      governanceSpy.mockRejectedValueOnce(new Error("Governance error"));
+
+      const result = await tracker.checkAndUpdatePRStatus(
+        "test-skill",
+        42,
+        "https://github.com/anthropics/claude-skills",
+        "Test Skill"
+      );
+
+      // Status should still be updated even if governance fails
+      expect(result.status).toBe("merged");
+      expect(mockDb.execute).toHaveBeenCalled();
+    });
+
+    it("should not trigger governance events for status changes other than merged/closed", async () => {
+      mockDb.query.mockResolvedValueOnce([{ status: "draft" }]);
+
+      jest.spyOn(tracker as any, "checkPRStatus").mockResolvedValueOnce({
+        prNumber: 42,
+        status: "open",
+        reviewState: "pending",
+        reviewComments: 0,
+        commitStatus: "pending",
+        lastCheckedAt: new Date().toISOString(),
+        checkedCount: 1,
+      });
+
+      const governanceSpy = jest.spyOn(
+        (tracker as any).governanceBridge,
+        "recordContributionEvent"
+      );
+
+      const result = await tracker.checkAndUpdatePRStatus(
+        "test-skill",
+        42,
+        "https://github.com/anthropics/claude-skills",
+        "Test Skill"
+      );
+
+      expect(result.status).toBe("open");
+      // Governance event should NOT be called for draft → open
+      expect(governanceSpy).not.toHaveBeenCalled();
+    });
+  });
 });

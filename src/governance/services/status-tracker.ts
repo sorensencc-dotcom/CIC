@@ -1,13 +1,16 @@
 // SCP Status Tracker - Phase 28a.5
 // GitHub PR polling for status updates, review state, and CI status
 // Features: retry logic, rate limit handling, caching, atomic DB updates
+// Governance: Phase 24.5 integration for merged/closed event recording
 
 import { Database } from "../db";
+import { SCPGovernanceBridge } from "./scp-governance-bridge";
 import {
   PRStatusSnapshot,
   PRStatusUpdate,
   ReviewState,
   SkillManifestRecord,
+  SkillContribution,
   ISO8601,
 } from "../models";
 
@@ -31,6 +34,7 @@ export class StatusTracker {
   private timeoutMs: number;
   private cacheMinutes: number;
   private githubToken: string;
+  private governanceBridge: SCPGovernanceBridge;
   private statusCache: Map<string, { snapshot: PRStatusSnapshot; timestamp: number }> =
     new Map();
 
@@ -40,6 +44,7 @@ export class StatusTracker {
     this.timeoutMs = config?.timeoutMs ?? 15000;
     this.cacheMinutes = config?.cacheMinutes ?? 5;
     this.githubToken = config?.githubToken || process.env.GITHUB_TOKEN || "";
+    this.governanceBridge = new SCPGovernanceBridge(db);
 
     if (!this.githubToken) {
       throw new Error("GITHUB_TOKEN environment variable is required");
@@ -433,6 +438,95 @@ export class StatusTracker {
   // Utility: sleep
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Check status and record governance events on merge/close (Phase 24.5)
+  async checkAndUpdatePRStatus(
+    skillId: string,
+    prNumber: number,
+    repoUrl: string,
+    skillName: string
+  ): Promise<PRStatusSnapshot> {
+    const cacheKey = `${skillId}#${prNumber}`;
+
+    try {
+      // Get current status
+      const snapshot = await this.checkPRStatus(skillId, prNumber, repoUrl);
+
+      // Get previous status from DB
+      const rows = await this.db.query(
+        "SELECT status FROM skill_contributions WHERE skill_id = ? AND pr_number = ?",
+        [skillId, prNumber]
+      );
+
+      const previousStatus = rows[0]?.status || "unknown";
+      const newStatus = snapshot.status;
+
+      // Detect status change to merged or closed
+      if (previousStatus === "open" && (newStatus === "merged" || newStatus === "closed")) {
+        log(skillId, prNumber, `Status changed: ${previousStatus} → ${newStatus}`);
+
+        // Update database
+        await this.db.execute(
+          "UPDATE skill_contributions SET status = ?, status_updated_at = CURRENT_TIMESTAMP WHERE skill_id = ? AND pr_number = ?",
+          [newStatus, skillId, prNumber]
+        );
+
+        // Record governance event (Phase 24.5)
+        try {
+          const contrib: SkillContribution = {
+            skillId,
+            skillName,
+            prNumber,
+            upstreamRepo: repoUrl,
+            prUrl: "", // TODO: fetch from DB if needed
+            status: newStatus as any,
+            createdAt: new Date().toISOString() as ISO8601,
+            lastChecked: new Date().toISOString() as ISO8601,
+            author: "scp-bot",
+            type: "feature",
+            description: `PR ${newStatus}`,
+          };
+
+          const lineageId = await this.governanceBridge.recordContributionEvent(
+            contrib,
+            newStatus as "merged" | "closed"
+          );
+
+          log(
+            skillId,
+            prNumber,
+            `Recorded governance event (lineage #${lineageId}) for ${newStatus}`
+          );
+
+          // Link to lineage if not already linked
+          await this.db.execute(
+            "UPDATE skill_contributions SET linked_skill_lineage_id = ? WHERE skill_id = ? AND pr_number = ? AND linked_skill_lineage_id IS NULL",
+            [lineageId, skillId, prNumber]
+          );
+        } catch (govError) {
+          logError(
+            skillId,
+            prNumber,
+            "Failed to record governance event",
+            govError
+          );
+          // Non-fatal: status already updated, governance linking is best-effort
+        }
+      } else if (newStatus !== previousStatus) {
+        // Other status changes (e.g. open → draft), just update DB
+        await this.db.execute(
+          "UPDATE skill_contributions SET status = ?, status_updated_at = CURRENT_TIMESTAMP WHERE skill_id = ? AND pr_number = ?",
+          [newStatus, skillId, prNumber]
+        );
+        log(skillId, prNumber, `Status updated: ${previousStatus} → ${newStatus}`);
+      }
+
+      return snapshot;
+    } catch (error) {
+      logError(skillId, prNumber, "Check and update status failed", error);
+      throw error;
+    }
   }
 
   // Clear cache (for testing)

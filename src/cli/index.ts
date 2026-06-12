@@ -3,6 +3,7 @@
 
 import { Command } from "commander";
 import { createManifestCommand } from "./commands/skill-manifest";
+import { createRunCommand } from "./commands/run";
 // Import DB and services when available
 // import { ManifestService } from "../governance/services/manifest-service";
 
@@ -19,8 +20,11 @@ export function createCLI(): Command {
   // TODO: Register skill-manifest command when DB is ready
   // cli.addCommand(createManifestCommand(manifestService));
 
+  // Register run command for pipeline execution
+  cli.addCommand(createRunCommand());
+
   return cli;
 }
 
 // For now, export command factory for testing
-export { createManifestCommand };
+export { createManifestCommand, createRunCommand };

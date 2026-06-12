@@ -43,6 +43,7 @@ export class Scheduler {
   start(): void {
     log("Starting scheduler...");
     this.scheduleDailyRun();
+    this.schedulePRStatusPolling();
     this.scheduleWeeklyReport();
     this.scheduleCleanup();
     log("Scheduler started");
@@ -110,6 +111,34 @@ export class Scheduler {
     }, delayMs);
 
     this.timers.set("weekly-report", timer);
+  }
+
+  // Schedule PR status polling (every 6 hours)
+  private schedulePRStatusPolling(): void {
+    const now = new Date();
+    const nextRun = new Date(now);
+    const hour = nextRun.getUTCHours();
+    const nextPollHour = Math.ceil((hour + 1) / 6) * 6; // Next 6-hour boundary
+
+    if (nextPollHour >= 24) {
+      nextRun.setUTCDate(nextRun.getUTCDate() + 1);
+      nextRun.setUTCHours(0, 0, 0, 0);
+    } else {
+      nextRun.setUTCHours(nextPollHour, 0, 0, 0);
+    }
+
+    const delayMs = nextRun.getTime() - now.getTime();
+    log(
+      `PR status polling scheduled for ${nextRun.toISOString()} (in ${Math.floor(delayMs / 1000)}s)`
+    );
+
+    const timer = setTimeout(() => {
+      this.runPRStatusPolling();
+      // Reschedule for next 6-hour window
+      this.schedulePRStatusPolling();
+    }, delayMs);
+
+    this.timers.set("pr-status-polling", timer);
   }
 
   // Schedule cleanup at 03:00 UTC daily
@@ -238,6 +267,81 @@ export class Scheduler {
       // TODO: Send report to Slack weekly-reports channel or email
     } catch (error) {
       logError("Weekly report generation failed", error);
+    }
+  }
+
+  // Poll open PR statuses and record governance events (Phase 24.5)
+  private async runPRStatusPolling(): Promise<void> {
+    log("Polling PR statuses for governance updates...");
+
+    try {
+      // Get all open PRs
+      const openPRs = await this.db.query(`
+        SELECT skill_id, skill_name, pr_number, upstream_repo_url
+        FROM skill_contributions
+        WHERE status = 'open'
+        ORDER BY last_checked_at ASC
+        LIMIT 100
+      `);
+
+      if (openPRs.length === 0) {
+        log("No open PRs to poll");
+        return;
+      }
+
+      log(`Polling ${openPRs.length} open PRs for status changes...`);
+
+      let updated = 0;
+      for (const pr of openPRs) {
+        try {
+          const snapshot = await this.tracker.checkAndUpdatePRStatus(
+            pr.skill_id,
+            pr.pr_number,
+            pr.upstream_repo_url,
+            pr.skill_name
+          );
+
+          if (snapshot.status !== "open") {
+            updated++;
+            log(`${pr.skill_id}#${pr.pr_number} → ${snapshot.status}`);
+
+            // Notify status change
+            try {
+              if (snapshot.status === "merged") {
+                await this.notifier.notifyMerged(
+                  pr.skill_id,
+                  pr.skill_name,
+                  pr.pr_number,
+                  pr.upstream_repo_url, // Will need PR URL from DB
+                  new Date().toISOString()
+                );
+              } else if (snapshot.status === "closed") {
+                await this.notifier.notifyClosed(
+                  pr.skill_id,
+                  pr.skill_name,
+                  pr.pr_number,
+                  pr.upstream_repo_url
+                );
+              }
+            } catch (notifyError) {
+              logError(`Failed to notify ${pr.skill_id}#${pr.pr_number}`, notifyError);
+            }
+          }
+
+          // Update last_checked_at
+          await this.db.execute(
+            "UPDATE skill_contributions SET last_checked_at = CURRENT_TIMESTAMP WHERE skill_id = ? AND pr_number = ?",
+            [pr.skill_id, pr.pr_number]
+          );
+        } catch (error) {
+          logError(`Failed to check ${pr.skill_id}#${pr.pr_number}`, error);
+          // Non-fatal: continue to next PR
+        }
+      }
+
+      log(`PR polling complete: ${updated} status changes detected`);
+    } catch (error) {
+      logError("PR status polling failed", error);
     }
   }
 

@@ -258,17 +258,69 @@ CREATE TABLE skill_contributions (
 
 ---
 
+## Phase 24.5 Governance Integration (COMPLETE)
+
+**Status:** ✅ Full integration wired for skill lineage tracking  
+**Implementation:** ContributionAgent + StatusTracker → SCPGovernanceBridge → skill_lineage vault
+
+### Workflow
+1. **PR Submission (ContributionAgent)**
+   - Creates PR via GitHub API
+   - Calls `SCPGovernanceBridge.recordContributionEvent("submitted")`
+   - Records submission event to `skill_lineage` table with risk_score
+   - Links PR record via `linked_skill_lineage_id` foreign key
+
+2. **Status Polling (StatusTracker + Scheduler)**
+   - Scheduler polls all open PRs every 6 hours
+   - StatusTracker.checkAndUpdatePRStatus() detects merged/closed transitions
+   - On status change:
+     - Calls `SCPGovernanceBridge.recordContributionEvent("merged"|"closed")`
+     - Records outcome event to `skill_lineage` with final verdict (PASS/FAIL)
+     - Updates linked_skill_lineage_id if not already set
+     - Notifier sends alert to #skill-contrib-alerts
+
+3. **Governance Vault Linkage**
+   - skill_contributions.linked_skill_lineage_id → skill_lineage.id
+   - Enables Phase 24 council to query SCP contributions by policy/verdict
+   - Full audit trail: Build → Lineage → Contribution → Policy Outcome
+
+### Database Schema
+```sql
+-- skill_contributions has foreign key:
+FOREIGN KEY (linked_skill_lineage_id) REFERENCES skill_lineage(id) ON DELETE SET NULL
+
+-- skill_lineage stores:
+source = 'SCP-Contribution'
+policies_triggered = ['SCP_CONTRIB_SUBMITTED'|'SCP_CONTRIB_MERGED'|'SCP_CONTRIB_CLOSED']
+verdict = 'WARN' (submitted), 'PASS' (merged), 'FAIL' (closed)
+risk_score = calculated from lines_added/deleted/type/status
+```
+
+### Methods Wired
+- `ContributionAgent.recordContributionToDB()` → recordContributionEvent("submitted") + linkContributionToLineage
+- `StatusTracker.checkAndUpdatePRStatus()` → recordContributionEvent("merged"|"closed") + update linked_skill_lineage_id
+- `Scheduler.runPRStatusPolling()` → every 6 hours, polls all open PRs, records transitions
+
+### Error Handling
+- Governance failures are non-fatal (logs warning, continues)
+- DB updates succeed before governance calls
+- Per-PR failures don't block other PRs
+- Per-task failures don't block other scheduled tasks
+
+---
+
 ## Integration Points
 
 ### Upstream (Inputs)
-- **Phase 24.5 Build Governance:** Links skill_lineage records to SCP contributions
-- **Phase 1.1 Docker:** Postgres infrastructure for manifest/contributions tables
+- **Phase 24.5 Build Governance:** Consumes SCP contribution events in skill_lineage vault
+- **Phase 24 Council Voting:** Queries contributions by verdict for approval decisions
+- **Phase 1.1 Docker:** Postgres infrastructure for manifest/contributions + skill_lineage tables
 - **Phase 0.9 TheFoundry:** Deterministic builds for skill files
 
 ### Downstream (Outputs)
-- **Phase 28a.5 Status Tracker:** Polls PR #/URL for status changes
+- **Phase 28a.5 Status Tracker:** Polls PR #/URL for status changes + records governance events
 - **Phase 28a.6 Notifier:** Sends Slack alerts on PR events
-- **Phase 28a.7 Scheduling:** Runs daily change detection + contribution batches
+- **Phase 28a.7 Scheduler:** Runs daily change detection + contribution batches + 6-hour PR polling
 
 ---
 
