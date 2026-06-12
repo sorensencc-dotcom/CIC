@@ -1,0 +1,25 @@
+src/governance/services/notifier.ts
+  s_23364b39b23e42::t_aa2e2bd8454d4a 1-290
+src/governance/services/scheduler.ts
+  s_23364b39b23e42::t_c26389cbacc39c 1-269
+src/governance/services/scheduler.test.ts
+  s_23364b39b23e42::t_a77a6e0ddfba0f 1-182
+src/governance/services/notifier.test.ts
+  s_23364b39b23e42::t_1a9f041aa56b22 1-210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5558f58fd77ed463875170017ac4d1c3f062c20a",
+  "prompts": {},
+  "sessions": {
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
