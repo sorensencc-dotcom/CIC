@@ -1,0 +1,23 @@
+PHASE-28a-SCP-COMPLETION.md
+  s_23364b39b23e42::t_6ff10b71544559 284-287
+  s_23364b39b23e42::t_9fb301703e623f 104-185
+  s_23364b39b23e42::t_a3e1ad1c8db3e4 3,5-6
+  s_23364b39b23e42::t_411f4010b72367 293,298-303,310,313-314,317
+  s_23364b39b23e42::t_1f5acf364f350c 362-364,367-398,402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "1c188551bf40929afdf61177f1b55e0882a6e1eb",
+  "prompts": {},
+  "sessions": {
+    "s_23364b39b23e42": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "634d2733-de5b-486e-a577-4a51780bbf56",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
