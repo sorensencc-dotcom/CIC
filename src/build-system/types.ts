@@ -8,6 +8,19 @@ export interface BuildGraphNode {
   depends_on: string[];
   capabilities: string[];
   policies: string[];
+  parallelJobs?: number;
+  memoryLimit?: string;
+  clearLocks?: boolean;
+  killOrphanedProcesses?: boolean;
+  usePinnedDependencies?: boolean;
+  useCache?: boolean;
+  cleanBuild?: boolean;
+  resetEnv?: boolean;
+  simulateFailure?: {
+    errorType: 'oom' | 'gpuOom' | 'lockContention' | 'dependencyConflict' | 'execTimeExceeded' | 'driftSignature' | 'generic';
+    errorMessage: string;
+    attemptsToFail?: number;
+  };
 }
 
 export interface BuildGraphSink {
@@ -81,3 +94,66 @@ export interface BuildExecutionPlan {
   execution_order: string[][];
   created_at: string;
 }
+
+// ============================================================================
+// Phase 0.9 Self-Healing Build System Types
+// ============================================================================
+
+export type SymptomType =
+  | 'execTimeExceeded'
+  | 'noOutput'
+  | 'noHeartbeat'
+  | 'oom'
+  | 'gpuOom'
+  | 'dependencyConflict'
+  | 'lockContention'
+  | 'driftSignature';
+
+export type FailureCategory = 'timeout' | 'crash' | 'drift' | 'resource' | 'cascade';
+
+export interface FailureClassification {
+  category: FailureCategory;
+  confidence: number; // 0 to 1
+  anomalyScore: number; // 0 to 100
+  symptoms: SymptomType[];
+}
+
+export interface FailureEvent {
+  event_id: string;
+  build_id: string;
+  node_id: string;
+  classification: FailureClassification;
+  error_message: string;
+  timestamp: string;
+}
+
+export interface RepairAction {
+  repair_id: string;
+  event_id: string;
+  repair_type: string;
+  params_before: Record<string, any>;
+  params_after: Record<string, any>;
+  success: boolean;
+  duration_ms: number;
+  timestamp: string;
+}
+
+export interface Checkpoint {
+  checkpoint_id: string;
+  build_id: string;
+  node_id: string;
+  layer: number;
+  node_results: Record<string, any>;
+  timestamp: string;
+}
+
+export type OrchestratorState =
+  | 'RUNNING'
+  | 'DETECTING'
+  | 'CLASSIFYING'
+  | 'ATTEMPTING_REPAIR'
+  | 'VALIDATING'
+  | 'COOLDOWN'
+  | 'ESCALATING'
+  | 'MANUAL_INTERVENTION';
+

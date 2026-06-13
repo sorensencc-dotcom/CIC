@@ -2,6 +2,7 @@ import { BuildGraph, BuildGraphNode, BuildExecutionPlan, NodeExecutionContext, B
 import { LineageRegistry } from './lineage-registry';
 import { RoutingEngine } from './routing-engine';
 import { DriftDetector } from './drift-detector';
+import { SelfHealingOrchestrator } from './self-healing-orchestrator';
 
 export class BuildGraphEngine {
   private graph: BuildGraph;
@@ -9,12 +10,29 @@ export class BuildGraphEngine {
   private routing: RoutingEngine;
   private drift: DriftDetector;
   private executionContexts: Map<string, NodeExecutionContext> = new Map();
+  private orchestrator: SelfHealingOrchestrator;
 
   constructor(graph: BuildGraph) {
     this.graph = graph;
     this.lineage = new LineageRegistry();
     this.routing = new RoutingEngine();
     this.drift = new DriftDetector(this.lineage);
+    this.orchestrator = new SelfHealingOrchestrator();
+  }
+
+  getSelfHealingOrchestrator(): SelfHealingOrchestrator {
+    return this.orchestrator;
+  }
+
+  getNodeLayer(nodeId: string): number {
+    const node = this.graph.nodes.find((n) => n.id === nodeId);
+    if (!node || node.depends_on.length === 0) return 0;
+
+    let maxDepLayer = 0;
+    for (const depId of node.depends_on) {
+      maxDepLayer = Math.max(maxDepLayer, this.getNodeLayer(depId));
+    }
+    return maxDepLayer + 1;
   }
 
   validateGraph(): { valid: boolean; errors: string[] } {
@@ -85,65 +103,145 @@ export class BuildGraphEngine {
     const node = this.graph.nodes.find((n) => n.id === nodeId);
     if (!node) return { success: false, error: new Error(`Node not found: ${nodeId}`) };
 
-    const context: NodeExecutionContext = {
-      node_id: nodeId,
-      build_id,
-      phase: this.graph.version,
-      inputs: new Map(),
-      outputs: new Map(),
-      start_time: new Date(),
-      status: 'running'
-    };
+    while (true) {
+      const context: NodeExecutionContext = {
+        node_id: nodeId,
+        build_id,
+        phase: this.graph.version,
+        inputs: new Map(),
+        outputs: new Map(),
+        start_time: new Date(),
+        status: 'running'
+      };
 
-    this.executionContexts.set(nodeId, context);
+      this.executionContexts.set(nodeId, context);
 
-    try {
-      // Resolve inputs from dependencies
-      for (const dep of node.depends_on) {
-        const depContext = this.executionContexts.get(dep);
-        if (depContext && depContext.status === 'succeeded') {
-          depContext.outputs.forEach((value, key) => context.inputs.set(`${dep}:${key}`, value));
+      try {
+        // Resolve inputs from dependencies
+        for (const dep of node.depends_on) {
+          const depContext = this.executionContexts.get(dep);
+          if (depContext && depContext.status === 'succeeded') {
+            depContext.outputs.forEach((value, key) => context.inputs.set(`${dep}:${key}`, value));
+          }
+        }
+
+        // Record artifact in lineage
+        const artifact = this.lineage.recordArtifact(
+          nodeId,
+          Array.from(context.inputs.keys()),
+          Array.from(context.outputs.keys()),
+          provenance,
+          build_id,
+          undefined
+        );
+
+        this.lineage.updateArtifactStatus(artifact.artifact_id, 'running');
+
+        // Check if there is a simulated failure configured for this node
+        const nodeConfig = node as any;
+        if (nodeConfig.simulateFailure) {
+          let stillFails = true;
+          const errorType = nodeConfig.simulateFailure.errorType;
+
+          if (nodeConfig.simulateFailure.attemptsToFail !== undefined) {
+            if (nodeConfig.simulateFailure.attemptsToFail <= 0) {
+              stillFails = false;
+            } else {
+              nodeConfig.simulateFailure.attemptsToFail--;
+            }
+          } else {
+            if (errorType === 'oom') {
+              if ((nodeConfig.parallelJobs && nodeConfig.parallelJobs <= 2) || nodeConfig.memoryLimit === '4g') {
+                stillFails = false;
+              }
+            } else if (errorType === 'gpuOom') {
+              if (nodeConfig.runtime === 'cpu') {
+                stillFails = false;
+              }
+            } else if (errorType === 'lockContention') {
+              if (nodeConfig.clearLocks) {
+                stillFails = false;
+              }
+            } else if (errorType === 'dependencyConflict') {
+              if (nodeConfig.usePinnedDependencies) {
+                stillFails = false;
+              }
+            } else if (errorType === 'execTimeExceeded') {
+              if (nodeConfig.useCache) {
+                stillFails = false;
+              }
+            } else if (errorType === 'driftSignature') {
+              if (nodeConfig.cleanBuild) {
+                stillFails = false;
+              }
+            } else if (errorType === 'generic') {
+              if (nodeConfig.resetEnv) {
+                stillFails = false;
+              }
+            }
+          }
+
+          if (stillFails) {
+            throw new Error(nodeConfig.simulateFailure.errorMessage || `Simulated failure of type ${errorType}`);
+          }
+        }
+
+        // Simulate node execution
+        context.outputs.set(`${nodeId}:output`, `artifact-${build_id}-${nodeId}`);
+
+        context.status = 'succeeded';
+        context.end_time = new Date();
+
+        this.lineage.updateArtifactStatus(artifact.artifact_id, 'succeeded');
+
+        // Save serialized checkpoint
+        const layer = this.getNodeLayer(nodeId);
+        this.orchestrator.getRecovery().createCheckpoint(
+          build_id,
+          nodeId,
+          layer,
+          this.executionContexts
+        );
+
+        return { success: true };
+      } catch (error) {
+        context.status = 'failed';
+        context.end_time = new Date();
+        context.error = error as Error;
+
+        // Retrieve the artifact that was created before the error
+        const artifacts = this.lineage.getArtifactsByBuild(build_id);
+        const artifact = artifacts.find((a) => a.agent_id === nodeId);
+        if (artifact) {
+          this.lineage.updateArtifactStatus(
+            artifact.artifact_id,
+            'failed',
+            error as Error
+          );
+        }
+
+        const executionTimeMs = Date.now() - context.start_time.getTime();
+        const dagNodes = this.graph.nodes.map((n) => ({ id: n.id, depends_on: n.depends_on }));
+
+        const repairResult = await this.orchestrator.handleFailure(
+          nodeId,
+          build_id,
+          error as Error,
+          node,
+          this.executionContexts,
+          dagNodes,
+          executionTimeMs
+        );
+
+        if (repairResult.action === 'retry') {
+          if (repairResult.mutatedConfig) {
+            Object.assign(node, repairResult.mutatedConfig);
+          }
+          continue;
+        } else {
+          return { success: false, error: error as Error };
         }
       }
-
-      // Record artifact in lineage
-      const artifact = this.lineage.recordArtifact(
-        nodeId,
-        Array.from(context.inputs.keys()),
-        Array.from(context.outputs.keys()),
-        provenance,
-        build_id,
-        undefined
-      );
-
-      this.lineage.updateArtifactStatus(artifact.artifact_id, 'running');
-
-      // Simulate node execution
-      context.outputs.set(`${nodeId}:output`, `artifact-${build_id}-${nodeId}`);
-
-      context.status = 'succeeded';
-      context.end_time = new Date();
-
-      this.lineage.updateArtifactStatus(artifact.artifact_id, 'succeeded');
-
-      return { success: true };
-    } catch (error) {
-      context.status = 'failed';
-      context.end_time = new Date();
-      context.error = error as Error;
-
-      // Retrieve the artifact that was created before the error
-      const artifacts = this.lineage.getArtifactsByBuild(build_id);
-      const artifact = artifacts.find((a) => a.agent_id === nodeId);
-      if (artifact) {
-        this.lineage.updateArtifactStatus(
-          artifact.artifact_id,
-          'failed',
-          error as Error
-        );
-      }
-
-      return { success: false, error: error as Error };
     }
   }
 

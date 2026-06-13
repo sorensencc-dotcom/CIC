@@ -12,5 +12,7 @@ export { SkillPolicies, calculateRiskScore, getPolicyById } from "./policies";
 export { loadAuditConfig, getDefaultAuditConfig } from "./config/audit.config";
 export type { AuditConfig } from "./config/audit.config";
 
+export * from "./vault";
+
 // Re-export types
 export * from "./types";

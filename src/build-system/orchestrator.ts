@@ -31,8 +31,21 @@ export class BuildOrchestrator {
   async initialize(): Promise<void> {
     try {
       const graphPath = path.join(__dirname, '../../phase0.7/build-system/graph/phase0.7.json');
-      const graphContent = fs.readFileSync(graphPath, 'utf8');
-      const graph: BuildGraph = JSON.parse(graphContent);
+      let graphContent: string;
+      try {
+        graphContent = fs.readFileSync(graphPath, 'utf8');
+      } catch (fsErr) {
+        const err = fsErr as NodeJS.ErrnoException;
+        throw new Error(`Failed to read graph file at ${graphPath}: ${err.code} - ${err.message}`);
+      }
+
+      let graph: BuildGraph;
+      try {
+        graph = JSON.parse(graphContent);
+      } catch (parseErr) {
+        const err = parseErr as SyntaxError;
+        throw new Error(`Invalid JSON in graph file: ${err.message} at line ${err.stack}`);
+      }
 
       const validation = new BuildGraphEngine(graph).validateGraph();
       if (!validation.valid) {
@@ -40,13 +53,15 @@ export class BuildOrchestrator {
       }
 
       this.engine = new BuildGraphEngine(graph);
-      console.log(`✓ Orchestrator initialized for Phase ${this.config.phase}`);
+      console.log(`✓ Orchestrator initialized for Phase ${this.config.phase} (git: ${process.env.GIT_SHA || 'unknown'})`);
       console.log(`  Lineage: ${this.config.lineageUrl}`);
       console.log(`  Routing: ${this.config.routingUrl}`);
       console.log(`  Nemotron: ${this.config.nemotronUrl}`);
       console.log(`  NIM Gateway: ${this.config.nimGatewayUrl}`);
     } catch (error) {
-      console.error('Failed to initialize orchestrator:', error);
+      const err = error as Error;
+      console.error('Failed to initialize orchestrator:', err.message);
+      console.error('Stack:', err.stack);
       throw error;
     }
   }
