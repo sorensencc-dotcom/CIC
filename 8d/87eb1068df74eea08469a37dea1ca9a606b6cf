@@ -1,0 +1,29 @@
+src/governance/services/scheduler.test.ts
+  s_4b1b33a7e0cf74::t_8423ae5e1f9f2c 15
+src/governance/services/status-tracker.test.ts
+  s_4b1b33a7e0cf74::t_053f039c413665 222
+src/governance/services/contribution-agent.test.ts
+  s_4b1b33a7e0cf74::t_39e9b400ebd020 43
+src/build-system/graph-engine.ts
+  s_4b1b33a7e0cf74::t_794fdf3cefecb4 117-120
+src/governance/services/change-detection-service.test.ts
+  s_4b1b33a7e0cf74::t_2021bc3c549333 41,165
+src/governance/services/notifier.test.ts
+  s_4b1b33a7e0cf74::t_b6ca85f26f581f 26,30,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "8d87eb1068df74eea08469a37dea1ca9a606b6cf",
+  "prompts": {},
+  "sessions": {
+    "s_4b1b33a7e0cf74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "864c33f1-1e6d-4997-8cf8-66cec8af1f6b",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
