@@ -112,57 +112,66 @@ class OrchestratorService {
     job.startTime = Date.now();
     job.logs.push(`[${new Date().toISOString()}] Build started`);
 
-    const executeLayer = (layerIndex) => {
-      if (layerIndex >= job.executionPlan.executionOrder.length) {
-        job.state = 'SUCCESS';
-        job.endTime = Date.now();
-        job.logs.push(`[${new Date().toISOString()}] Build completed (${job.endTime - job.startTime}ms)`);
-        return;
-      }
+    const executeLayer = async (layerIndex) => {
+      try {
+        if (layerIndex >= job.executionPlan.executionOrder.length) {
+          job.state = 'SUCCESS';
+          job.endTime = Date.now();
+          job.logs.push(`[${new Date().toISOString()}] Build completed (${job.endTime - job.startTime}ms)`);
+          return;
+        }
 
-      const layer = job.executionPlan.executionOrder[layerIndex];
-      job.logs.push(`[${new Date().toISOString()}] Executing layer ${layerIndex + 1}/${job.executionPlan.layerCount}`);
+        const layer = job.executionPlan.executionOrder[layerIndex];
+        job.logs.push(`[${new Date().toISOString()}] Executing layer ${layerIndex + 1}/${job.executionPlan.layerCount}`);
 
-      Promise.all(
-        layer.map((nodeId) => {
-          const node = job.dag.find((n) => n.id === nodeId);
-          if (!node) return Promise.resolve();
+        await Promise.all(
+          layer.map((nodeId) => {
+            const node = job.dag.find((n) => n.id === nodeId);
+            if (!node) return Promise.resolve();
 
-          job.logs.push(`[${new Date().toISOString()}] Node ${nodeId} started`);
+            job.logs.push(`[${new Date().toISOString()}] Node ${nodeId} started`);
 
-          return new Promise((resolve) => {
-            setTimeout(() => {
-              const context = {
-                nodeId,
-                phase: node.phase,
-                executionTime: 250,
-                status: 'success',
-                artifacts: {
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                const context = {
                   nodeId,
-                  timestamp: new Date().toISOString(),
-                  data: { result: 'mock result' },
-                },
-                error: null,
-              };
+                  phase: node.phase,
+                  executionTime: 250,
+                  status: 'success',
+                  artifacts: {
+                    nodeId,
+                    timestamp: new Date().toISOString(),
+                    data: { result: 'mock result' },
+                  },
+                  error: null,
+                };
 
-              job.nodeResults.set(nodeId, context);
-              job.logs.push(`[${new Date().toISOString()}] Node ${nodeId} completed`);
-              resolve();
-            }, Math.random() * 500 + 100);
-          });
-        }),
-      ).then(() => {
-        executeLayer(layerIndex + 1);
-      }).catch((err) => {
+                job.nodeResults.set(nodeId, context);
+                job.logs.push(`[${new Date().toISOString()}] Node ${nodeId} completed`);
+                resolve();
+              }, Math.random() * 500 + 100);
+            });
+          }),
+        );
+
+        await executeLayer(layerIndex + 1);
+      } catch (err) {
         job.state = 'FAILED';
         job.endTime = Date.now();
         job.error = err instanceof Error ? err.message : 'Unknown layer execution error';
         job.logs.push(`[${new Date().toISOString()}] Layer ${layerIndex + 1} failed: ${job.error}`);
         console.error(`[Orchestrator] Layer ${layerIndex + 1} execution error:`, err);
-      });
+      }
     };
 
-    executeLayer(0);
+    executeLayer(0).catch((err) => {
+      console.error('[Orchestrator] Fatal error in DAG execution:', err);
+      if (job.state !== 'FAILED') {
+        job.state = 'FAILED';
+        job.endTime = Date.now();
+        job.error = 'Fatal DAG execution error';
+      }
+    });
   }
 
   handleRequest(req, res) {

@@ -29,24 +29,30 @@ export class BuildOrchestrator {
   }
 
   async initialize(): Promise<void> {
+    let graphContent: string;
+    const graphPath = path.join(__dirname, '../../phase0.7/build-system/graph/phase0.7.json');
+
     try {
-      const graphPath = path.join(__dirname, '../../phase0.7/build-system/graph/phase0.7.json');
-      let graphContent: string;
-      try {
-        graphContent = fs.readFileSync(graphPath, 'utf8');
-      } catch (fsErr) {
-        const err = fsErr as NodeJS.ErrnoException;
-        throw new Error(`Failed to read graph file at ${graphPath}: ${err.code} - ${err.message}`);
-      }
+      graphContent = fs.readFileSync(graphPath, 'utf8');
+    } catch (fsErr) {
+      const err = fsErr as NodeJS.ErrnoException;
+      const msg = `Failed to read graph file at ${graphPath}: ${err.code} - ${err.message}`;
+      console.error(msg);
+      throw new Error(msg);
+    }
 
-      let graph: BuildGraph;
-      try {
-        graph = JSON.parse(graphContent);
-      } catch (parseErr) {
-        const err = parseErr as SyntaxError;
-        throw new Error(`Invalid JSON in graph file: ${err.message} at line ${err.stack}`);
-      }
+    let graph: BuildGraph;
+    try {
+      graph = JSON.parse(graphContent);
+    } catch (parseErr) {
+      const err = parseErr as SyntaxError;
+      const msg = `Invalid JSON in graph file at ${graphPath}: ${err.message}`;
+      console.error(msg);
+      console.error('Content preview:', graphContent.substring(0, 200));
+      throw new Error(msg);
+    }
 
+    try {
       const validation = new BuildGraphEngine(graph).validateGraph();
       if (!validation.valid) {
         throw new Error(`Graph validation failed: ${validation.errors.join(', ')}`);
