@@ -40,7 +40,7 @@ describe("ContributionAgent", () => {
 
   describe("createPullRequest - Happy Path", () => {
     it("should create PR from detected changes", async () => {
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
         cb(null, "# Updated Skill\n\nContent");
       });
 

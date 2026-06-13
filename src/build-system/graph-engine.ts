@@ -3,6 +3,12 @@ import { LineageRegistry } from './lineage-registry';
 import { RoutingEngine } from './routing-engine';
 import { DriftDetector } from './drift-detector';
 import { SelfHealingOrchestrator } from './self-healing-orchestrator';
+import { FailureDetector } from './failure-detector';
+import { AutoRestartEngine } from './auto-restart-engine';
+import { AutoRepairEngine } from './auto-repair-engine';
+import { StateRecoveryManager, InMemoryStateStore } from './state-recovery-manager';
+import { NoopMetricsRegistry } from './self-healing-metrics';
+import { ConsoleStateMachineLogger } from './state-machine-logger';
 
 export class BuildGraphEngine {
   private graph: BuildGraph;
@@ -17,7 +23,16 @@ export class BuildGraphEngine {
     this.lineage = new LineageRegistry();
     this.routing = new RoutingEngine();
     this.drift = new DriftDetector(this.lineage);
-    this.orchestrator = new SelfHealingOrchestrator();
+    this.orchestrator = new SelfHealingOrchestrator(
+      new FailureDetector({ timeoutThresholdFactor: 1.0, anomalyScoreWeights: { durationMs: 0.5 } }),
+      new AutoRestartEngine({ maxNodeRetries: 3, maxBuildRetries: 5, baseDelayMs: 200, backoffFactor: 2.0 }),
+      new AutoRepairEngine(),
+      new StateRecoveryManager(new InMemoryStateStore()),
+      { emit: async () => {} }, // dummy event sink
+      new NoopMetricsRegistry(),
+      { anomalyThreshold: 80 },
+      new ConsoleStateMachineLogger()
+    );
   }
 
   getSelfHealingOrchestrator(): SelfHealingOrchestrator {
@@ -100,23 +115,65 @@ export class BuildGraphEngine {
     build_id: string,
     provenance: BuildProvenance
   ): Promise<{ success: boolean; error?: Error | null }> {
+    return this.executeNodeWithSelfHealing(nodeId, build_id, provenance);
+  }
+
+  async executeNodeWithSelfHealing(
+    nodeId: string,
+    build_id: string,
+    provenance: BuildProvenance
+  ): Promise<{ success: boolean; error?: Error | null }> {
     const node = this.graph.nodes.find((n) => n.id === nodeId);
     if (!node) return { success: false, error: new Error(`Node not found: ${nodeId}`) };
 
-    while (true) {
-      const context: NodeExecutionContext = {
-        node_id: nodeId,
-        build_id,
-        phase: this.graph.version,
-        inputs: new Map(),
-        outputs: new Map(),
-        start_time: new Date(),
-        status: 'running'
-      };
+    const ctx = {
+      buildId: build_id,
+      nodeId: nodeId,
+      nodeRetryCount: 0,
+      buildRetryCount: 0,
+      repairActionsApplied: [],
+      repairHooks: {
+        reduceBatchSize: async (id: string) => {
+          console.log(`Executing reduceBatchSize hook for node ${id}`);
+          if (node) { node.parallelJobs = Math.max(1, Math.floor((node.parallelJobs || 4) / 2)); }
+        },
+        reduceConcurrency: async (id: string) => {
+          console.log(`Executing reduceConcurrency hook for node ${id}`);
+          if (node) { node.parallelJobs = Math.max(1, Math.floor((node.parallelJobs || 4) / 2)); }
+        },
+        clearMemoryCache: async (id: string) => {
+          console.log(`Executing clearMemoryCache hook for node ${id}`);
+          if (node) { node.memoryLimit = '4g'; }
+        },
+        useCachedArtifacts: async (id: string) => {
+          if (node) { node.useCache = true; }
+        },
+        clearOutputsAndRebuild: async (id: string) => {
+          if (node) { node.cleanBuild = true; }
+        },
+        applyPinnedDepOverrides: async (id: string) => {
+          if (node) { node.usePinnedDependencies = true; }
+        },
+        fallbackToCpu: async (id: string) => {
+          if (node) { node.runtime = 'cpu'; }
+        }
+      }
+    };
 
-      this.executionContexts.set(nodeId, context);
+    try {
+      await this.orchestrator.runNode(ctx, async () => {
+        const context: NodeExecutionContext = {
+          node_id: nodeId,
+          build_id,
+          phase: this.graph.version,
+          inputs: new Map(),
+          outputs: new Map(),
+          start_time: new Date(),
+          status: 'running'
+        };
 
-      try {
+        this.executionContexts.set(nodeId, context);
+
         // Resolve inputs from dependencies
         for (const dep of node.depends_on) {
           const depContext = this.executionContexts.get(dep);
@@ -196,52 +253,33 @@ export class BuildGraphEngine {
 
         // Save serialized checkpoint
         const layer = this.getNodeLayer(nodeId);
-        this.orchestrator.getRecovery().createCheckpoint(
-          build_id,
-          nodeId,
-          layer,
-          this.executionContexts
+        await this.orchestrator.getRecovery().saveCheckpoint(
+          { buildId: build_id, nodeId },
+          Array.from(this.executionContexts.entries()) // Maps are not easily JSON serializable, so convert to array
         );
+      });
 
-        return { success: true };
-      } catch (error) {
+      return { success: true };
+    } catch (error) {
+      const context = this.executionContexts.get(nodeId);
+      if (context) {
         context.status = 'failed';
         context.end_time = new Date();
         context.error = error as Error;
-
-        // Retrieve the artifact that was created before the error
-        const artifacts = this.lineage.getArtifactsByBuild(build_id);
-        const artifact = artifacts.find((a) => a.agent_id === nodeId);
-        if (artifact) {
-          this.lineage.updateArtifactStatus(
-            artifact.artifact_id,
-            'failed',
-            error as Error
-          );
-        }
-
-        const executionTimeMs = Date.now() - context.start_time.getTime();
-        const dagNodes = this.graph.nodes.map((n) => ({ id: n.id, depends_on: n.depends_on }));
-
-        const repairResult = await this.orchestrator.handleFailure(
-          nodeId,
-          build_id,
-          error as Error,
-          node,
-          this.executionContexts,
-          dagNodes,
-          executionTimeMs
-        );
-
-        if (repairResult.action === 'retry') {
-          if (repairResult.mutatedConfig) {
-            Object.assign(node, repairResult.mutatedConfig);
-          }
-          continue;
-        } else {
-          return { success: false, error: error as Error };
-        }
       }
+
+      // Retrieve the artifact that was created before the error
+      const artifacts = this.lineage.getArtifactsByBuild(build_id);
+      const artifact = artifacts.find((a) => a.agent_id === nodeId);
+      if (artifact) {
+        this.lineage.updateArtifactStatus(
+          artifact.artifact_id,
+          'failed',
+          error as Error
+        );
+      }
+
+      return { success: false, error: error as Error };
     }
   }
 
@@ -250,7 +288,7 @@ export class BuildGraphEngine {
 
     for (const layer of plan.execution_order) {
       for (const nodeId of layer) {
-        const result = await this.executeNode(nodeId, plan.build_id, provenance);
+        const result = await this.executeNodeWithSelfHealing(nodeId, plan.build_id, provenance);
         if (!result.success && result.error) {
           errors.push(result.error);
         }

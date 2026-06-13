@@ -23,11 +23,11 @@ describe("Notifier", () => {
   describe("notifySubmitted", () => {
     it("should send submitted notification with PR details", async () => {
       // Mock https.request
-      const mockRequest = jest.fn((options, callback) => {
+      const mockRequest = jest.fn((options: any, callback: (res: any) => void): any => {
         const mockRes = {
           statusCode: 200,
           headers: {},
-          on: jest.fn((event, handler) => {
+          on: jest.fn((event: string, handler: () => void): any => {
             if (event === "data") {
               // No-op
             } else if (event === "end") {
@@ -40,7 +40,7 @@ describe("Notifier", () => {
         };
         callback(mockRes);
         return {
-          on: jest.fn((event, handler) => {
+          on: jest.fn((event: string, handler: () => void): any => {
             if (event === "timeout") {
               // No-op
             } else if (event === "error") {

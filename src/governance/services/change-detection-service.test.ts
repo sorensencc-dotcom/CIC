@@ -38,7 +38,7 @@ describe("ChangeDetectionService", () => {
 
       // Mock file read
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
         cb(null, content);
       });
 
@@ -162,7 +162,7 @@ describe("ChangeDetectionService", () => {
 
       mockDb.query.mockResolvedValueOnce([skillRecord]);
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
         cb(null, content);
       });
 

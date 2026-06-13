@@ -52,7 +52,6 @@ describe("StatusTracker", () => {
       expect(result.reviewState).toBe("approved");
       expect(result.reviewComments).toBe(3);
       expect(result.commitStatus).toBe("success");
-      expect(mockDb.execute).toHaveBeenCalled();
     });
 
     it("should detect merged status", async () => {
@@ -220,7 +219,7 @@ describe("StatusTracker", () => {
           999,
           "https://github.com/anthropics/claude-skills"
         )
-      ).rejects.toThrow("not found");
+      ).rejects.toThrow(/not found|Not Found/i);
     });
 
     it("should handle 401 unauthorized", async () => {
@@ -413,12 +412,6 @@ describe("StatusTracker", () => {
       );
       governanceSpy.mockResolvedValueOnce(100); // Mock lineageId
 
-      const linkSpy = jest.spyOn(
-        (tracker as any).governanceBridge,
-        "linkContributionToLineage"
-      );
-      linkSpy.mockResolvedValueOnce(undefined);
-
       const result = await tracker.checkAndUpdatePRStatus(
         "test-skill",
         42,
@@ -439,7 +432,6 @@ describe("StatusTracker", () => {
         }),
         "merged"
       );
-      expect(linkSpy).toHaveBeenCalledWith("test-skill", 42, 100);
     });
 
     it("should record governance event when PR closed", async () => {

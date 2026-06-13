@@ -12,6 +12,7 @@ describe("Scheduler", () => {
       query: jest.fn().mockResolvedValue([]),
     };
 
+    process.env.GITHUB_TOKEN = "test-token-123";
     process.env.SLACK_WEBHOOK_SCP = "https://hooks.slack.com/services/TEST/HOOK";
     scheduler = new Scheduler(mockDb, {
       dailyRunTime: "00:00",
