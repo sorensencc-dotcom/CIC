@@ -1,0 +1,21 @@
+src/build-system/orchestrator-service.ts
+  s_9c5ea7eeb98f11::t_3c8ef2c7467b9d 115-122,124-125,127-130,132,134-136,138-158,164,167-174
+src/build-system/orchestrator.ts
+  s_9c5ea7eeb98f11::t_fd5fdec884f18e 32-34,36-42,44-53,55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5a5356cfbd83bf48639d86794cf4d85fd314d5da",
+  "prompts": {},
+  "sessions": {
+    "s_9c5ea7eeb98f11": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9997bef8-7c13-499a-a4c1-eb89a8839ea7",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
