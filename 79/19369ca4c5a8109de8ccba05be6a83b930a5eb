@@ -1,0 +1,29 @@
+__tests__/planning/delta-synthesizer.test.ts
+  s_d56352375308c6::t_9cdad0bfe2528b 1-24
+src/planning/AutoschedulerV2.ts
+  s_d56352375308c6::t_9cdad0bfe2528b 1-42
+__tests__/planning/autoscheduler-v2.test.ts
+  s_d56352375308c6::t_9cdad0bfe2528b 1-29
+src/planning/PhaseCostEstimator.ts
+  s_d56352375308c6::t_9cdad0bfe2528b 1-29
+__tests__/planning/phase-cost-estimator.test.ts
+  s_d56352375308c6::t_9cdad0bfe2528b 1-24
+src/planning/RoadmapDeltaSynthesizer.ts
+  s_d56352375308c6::t_9cdad0bfe2528b 1-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "7919369ca4c5a8109de8ccba05be6a83b930a5eb",
+  "prompts": {},
+  "sessions": {
+    "s_d56352375308c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a425f21-d8b9-4736-9496-1ad596b09055",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
