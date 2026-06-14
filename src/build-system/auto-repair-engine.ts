@@ -1,74 +1,79 @@
-import { FailureClassification, RepairAction } from './types';
+// src/build-system/auto-repair-engine.ts
+
+import { FailureCategory, FailureEvent } from './failure-detector';
+
+export type RepairAction =
+  | 'REDUCE_BATCH'
+  | 'REDUCE_CONCURRENCY'
+  | 'CLEAR_MEMORY_CACHE'
+  | 'USE_CACHED_ARTIFACTS'
+  | 'CLEAR_OUTPUTS_AND_REBUILD'
+  | 'APPLY_PINNED_DEP_OVERRIDES'
+  | 'FALLBACK_TO_CPU';
+
+export interface RepairPlan {
+  actions: RepairAction[];
+  reason: string;
+}
+
+const REPAIR_STRATEGIES: Record<FailureCategory, RepairAction[]> = {
+  TIMEOUT: ['USE_CACHED_ARTIFACTS', 'REDUCE_CONCURRENCY'],
+  CRASH: ['CLEAR_OUTPUTS_AND_REBUILD'],
+  DRIFT: ['CLEAR_OUTPUTS_AND_REBUILD'],
+  OOM: ['REDUCE_BATCH', 'CLEAR_MEMORY_CACHE'],
+  GPU_OOM: ['FALLBACK_TO_CPU', 'REDUCE_BATCH'],
+  RESOURCE_SPIKE: ['REDUCE_CONCURRENCY'],
+};
+
+export interface RepairExecutionContext {
+  buildId: string;
+  nodeId: string;
+  // hooks into your actual build system:
+  reduceBatchSize: (nodeId: string) => Promise<void>;
+  reduceConcurrency: (nodeId: string) => Promise<void>;
+  clearMemoryCache: (nodeId: string) => Promise<void>;
+  useCachedArtifacts: (nodeId: string) => Promise<void>;
+  clearOutputsAndRebuild: (nodeId: string) => Promise<void>;
+  applyPinnedDepOverrides: (nodeId: string) => Promise<void>;
+  fallbackToCpu: (nodeId: string) => Promise<void>;
+}
 
 export class AutoRepairEngine {
-  private repairHistory: RepairAction[] = [];
+  planRepair(failure: FailureEvent): RepairPlan {
+    const actions = REPAIR_STRATEGIES[failure.category] ?? [];
+    const reason = `Repair plan for ${failure.category} on node ${failure.nodeId}`;
 
-  attemptRepair(
-    nodeId: string,
-    eventId: string,
-    classification: FailureClassification,
-    nodeConfig: any
-  ): { success: boolean; action: RepairAction; mutatedConfig: any } {
-    const startTime = Date.now();
-    const repairId = `repair-${startTime}-${Math.random().toString(36).slice(2, 9)}`;
-    const params_before = JSON.parse(JSON.stringify(nodeConfig));
-    const mutatedConfig = JSON.parse(JSON.stringify(nodeConfig));
-    
-    let success = false;
-    let repairType = 'unknown';
-
-    const { symptoms } = classification;
-
-    if (symptoms.includes('oom')) {
-      repairType = 'oom-reduce-concurrency';
-      // Halve parallelism concurrency to reduce memory footprints
-      mutatedConfig.parallelJobs = Math.max(1, Math.floor((params_before.parallelJobs || 4) / 2));
-      mutatedConfig.memoryLimit = '4g'; // Upscale container limits if applicable
-      success = true;
-    } else if (symptoms.includes('gpuOom')) {
-      repairType = 'gpu-fallback-cpu';
-      mutatedConfig.runtime = 'cpu';
-      success = true;
-    } else if (symptoms.includes('lockContention')) {
-      repairType = 'clear-stale-locks';
-      mutatedConfig.clearLocks = true;
-      mutatedConfig.killOrphanedProcesses = true;
-      success = true;
-    } else if (symptoms.includes('dependencyConflict')) {
-      repairType = 'override-dependencies-pinned';
-      mutatedConfig.usePinnedDependencies = true;
-      success = true;
-    } else if (symptoms.includes('execTimeExceeded')) {
-      repairType = 'enable-caching';
-      mutatedConfig.useCache = true;
-      success = true;
-    } else if (symptoms.includes('driftSignature')) {
-      repairType = 'clean-build-force';
-      mutatedConfig.cleanBuild = true;
-      success = true;
-    } else {
-      // Fallback fallback
-      repairType = 'generic-retry-reset';
-      mutatedConfig.resetEnv = true;
-      success = true;
-    }
-
-    const action: RepairAction = {
-      repair_id: repairId,
-      event_id: eventId,
-      repair_type: repairType,
-      params_before,
-      params_after: mutatedConfig,
-      success,
-      duration_ms: Date.now() - startTime,
-      timestamp: new Date().toISOString(),
-    };
-
-    this.repairHistory.push(action);
-    return { success, action, mutatedConfig };
+    return { actions, reason };
   }
 
-  getRepairHistory(): RepairAction[] {
-    return this.repairHistory;
+  async executeRepair(
+    ctx: RepairExecutionContext,
+    plan: RepairPlan,
+  ): Promise<void> {
+    for (const action of plan.actions) {
+      switch (action) {
+        case 'REDUCE_BATCH':
+          await ctx.reduceBatchSize(ctx.nodeId);
+          break;
+        case 'REDUCE_CONCURRENCY':
+          await ctx.reduceConcurrency(ctx.nodeId);
+          break;
+        case 'CLEAR_MEMORY_CACHE':
+          await ctx.clearMemoryCache(ctx.nodeId);
+          break;
+        case 'USE_CACHED_ARTIFACTS':
+          await ctx.useCachedArtifacts(ctx.nodeId);
+          break;
+        case 'CLEAR_OUTPUTS_AND_REBUILD':
+          await ctx.clearOutputsAndRebuild(ctx.nodeId);
+          break;
+        case 'APPLY_PINNED_DEP_OVERRIDES':
+          await ctx.applyPinnedDepOverrides(ctx.nodeId);
+          break;
+        case 'FALLBACK_TO_CPU':
+          await ctx.fallbackToCpu(ctx.nodeId);
+          break;
+      }
+    }
   }
 }

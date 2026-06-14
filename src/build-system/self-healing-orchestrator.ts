@@ -1,110 +1,234 @@
-import { FailureDetector } from './failure-detector';
-import { AutoRestartEngine } from './auto-restart-engine';
-import { AutoRepairEngine } from './auto-repair-engine';
+// src/build-system/self-healing-orchestrator.ts
+
+import { FailureDetector, FailureEvent } from './failure-detector';
+import { AutoRestartEngine, RetryState } from './auto-restart-engine';
+import { AutoRepairEngine, RepairPlan, RepairAction } from './auto-repair-engine';
 import { StateRecoveryManager } from './state-recovery-manager';
-import { OrchestratorState, FailureClassification, FailureEvent } from './types';
+import {
+  OrchestratorState,
+  EscalationEvent,
+  ManualInterventionEvent,
+  EventSink,
+} from './self-healing-events';
+import { MetricsRegistry } from './self-healing-metrics';
+import { StateMachineLogger } from './state-machine-logger';
+
+export interface OrchestratorConfig {
+  anomalyThreshold: number; // below this, ignore
+}
+
+export interface OrchestratorContext {
+  buildId: string;
+  nodeId: string;
+  nodeRetryCount: number;
+  buildRetryCount: number;
+  failureEvent?: FailureEvent;
+  repairActionsApplied: RepairAction[];
+  repairHooks: Omit<import('./auto-repair-engine').RepairExecutionContext, 'buildId' | 'nodeId'>;
+}
+
+export type NodeExecutor = () => Promise<unknown>;
 
 export class SelfHealingOrchestrator {
-  private detector = new FailureDetector();
-  private restarter = new AutoRestartEngine();
-  private repairer = new AutoRepairEngine();
-  private recovery = new StateRecoveryManager();
   private state: OrchestratorState = 'RUNNING';
-  private failureEvents: FailureEvent[] = [];
+  private readonly failureEvents: FailureEvent[] = [];
+
+  constructor(
+    private readonly failureDetector: FailureDetector,
+    private readonly autoRestartEngine: AutoRestartEngine,
+    private readonly autoRepairEngine: AutoRepairEngine,
+    private readonly stateRecoveryManager: StateRecoveryManager,
+    private readonly eventSink: EventSink,
+    private readonly metrics: MetricsRegistry,
+    private readonly config: OrchestratorConfig,
+    private readonly logger?: StateMachineLogger,
+  ) {}
 
   getState(): OrchestratorState {
     return this.state;
   }
 
-  getDetector(): FailureDetector { return this.detector; }
-  getRestarter(): AutoRestartEngine { return this.restarter; }
-  getRepairer(): AutoRepairEngine { return this.repairer; }
-  getRecovery(): StateRecoveryManager { return this.recovery; }
+  getRestarter(): AutoRestartEngine {
+    return this.autoRestartEngine;
+  }
 
-  async handleFailure(
-    nodeId: string,
-    buildId: string,
-    error: Error | null,
-    nodeConfig: any,
-    nodeResults: Map<string, any>,
-    dagNodes: { id: string; depends_on: string[] }[],
-    executionTimeMs?: number
-  ): Promise<{ action: 'retry' | 'escalate'; backoffDelay?: number; mutatedConfig?: any }> {
-    console.log(`[SelfHealing] Processing failure on node: ${nodeId}`);
-    this.state = 'DETECTING';
+  getRepairer(): AutoRepairEngine {
+    return this.autoRepairEngine;
+  }
 
-    // 1. Detect & Classify
-    const classification = this.detector.classifyFailure(nodeId, executionTimeMs || 500, error) || {
-      category: 'crash' as const,
-      confidence: 1.0,
-      anomalyScore: 100,
-      symptoms: ['noOutput' as const],
-    };
-
-    this.state = 'CLASSIFYING';
-    const eventId = `event-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const failureEvent: FailureEvent = {
-      event_id: eventId,
-      build_id: buildId,
-      node_id: nodeId,
-      classification,
-      error_message: error ? error.message : 'Unknown execution error',
-      timestamp: new Date().toISOString(),
-    };
-    this.failureEvents.push(failureEvent);
-
-    console.log(`[SelfHealing] Classification: ${classification.category} (Score: ${classification.anomalyScore}, Confidence: ${classification.confidence})`);
-
-    // 2. Check retry budget limit
-    if (!this.restarter.shouldRestart(nodeId)) {
-      console.warn(`[SelfHealing] Retry budget exhausted for node ${nodeId} or build ${buildId}. Escalating.`);
-      this.state = 'ESCALATING';
-      this.state = 'MANUAL_INTERVENTION';
-      return { action: 'escalate' };
-    }
-
-    // 3. Attempt Repair Strategy
-    this.state = 'ATTEMPTING_REPAIR';
-    const { success, action, mutatedConfig } = this.repairer.attemptRepair(
-      nodeId,
-      eventId,
-      classification,
-      nodeConfig
-    );
-    console.log(`[SelfHealing] Repair attempted: ${action.repair_type} (Success: ${success})`);
-
-    // 4. Validate & Rollback
-    this.state = 'VALIDATING';
-    const attempt = this.restarter.recordAttempt(nodeId);
-    const delay = this.restarter.getBackoffDelay(nodeId);
-
-    // Dynamic rollback based on severity
-    let rollbackResult;
-    if (classification.category === 'drift' || classification.anomalyScore > 80) {
-      console.log(`[SelfHealing] High anomaly detected. Performing Level 2 (Subtree) Rollback.`);
-      rollbackResult = this.recovery.rollbackLevel2(buildId, nodeId, nodeResults, dagNodes);
-    } else {
-      console.log(`[SelfHealing] Low/Medium anomaly detected. Performing Level 1 (Node) Rollback.`);
-      rollbackResult = this.recovery.rollbackLevel1(buildId, nodeId, nodeResults);
-    }
-
-    console.log(`[SelfHealing] Rollback complete. Affected nodes: ${rollbackResult.affectedNodes.join(', ')}`);
-
-    // 5. Cooldown period to prevent thrashing
-    this.state = 'COOLDOWN';
-    const cooldownDelay = Math.min(1000, delay); // Cap at 1000ms for test fastness
-    console.log(`[SelfHealing] Entering COOLDOWN state for ${cooldownDelay}ms...`);
-    await new Promise((resolve) => setTimeout(resolve, cooldownDelay));
-
-    this.state = 'RUNNING';
-    return {
-      action: 'retry',
-      backoffDelay: delay,
-      mutatedConfig,
-    };
+  getRecovery(): StateRecoveryManager {
+    return this.stateRecoveryManager;
   }
 
   getFailureEvents(): FailureEvent[] {
     return this.failureEvents;
+  }
+
+  private transitionTo(to: OrchestratorState, ctx: OrchestratorContext) {
+    const from = this.state;
+    this.state = to;
+    if (this.logger) {
+      this.logger.log({
+        buildId: ctx.buildId,
+        nodeId: ctx.nodeId,
+        from,
+        to,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  async runNode(
+    ctx: OrchestratorContext,
+    executeNode: NodeExecutor,
+  ): Promise<unknown> {
+    this.transitionTo('RUNNING', ctx);
+
+    while (true) {
+      try {
+        const result = await executeNode();
+        // success path
+        this.transitionTo('RUNNING', ctx);
+        return result;
+      } catch (error) {
+        this.transitionTo('DETECTING', ctx);
+
+        const failure = this.failureDetector.detectCrash(
+          {
+            buildId: ctx.buildId,
+            nodeId: ctx.nodeId,
+            startTime: Date.now(), // refine with real timing
+            timeoutMs: 0,
+          },
+          error as Error,
+        );
+
+        ctx.failureEvent = failure;
+        this.failureEvents.push(failure);
+
+        this.transitionTo('CLASSIFYING', ctx);
+
+        // Record metrics for failure event
+        this.metrics.failureEvents.inc({ category: failure.category, nodeId: ctx.nodeId });
+        this.metrics.anomalyScores.observe(
+          { category: failure.category },
+          failure.anomalyScore,
+        );
+
+        if (failure.anomalyScore < this.config.anomalyThreshold) {
+          // treat as transient, maybe log and continue
+          const retryDecision = this.autoRestartEngine.decideRetry({
+            nodeRetryCount: ctx.nodeRetryCount,
+            buildRetryCount: ctx.buildRetryCount,
+          });
+
+          if (!retryDecision.shouldRetry) {
+            this.transitionTo('ESCALATING', ctx);
+            this.metrics.escalations.inc({ buildId: ctx.buildId, nodeId: ctx.nodeId });
+            await this.escalate(ctx, 'Low anomaly but retry quotas exceeded');
+            this.transitionTo('MANUAL_INTERVENTION', ctx);
+            return Promise.reject(error);
+          }
+
+          // Record metrics for retry
+          this.metrics.nodeRetries.inc({ nodeId: ctx.nodeId });
+          this.metrics.buildRetries.inc({ buildId: ctx.buildId });
+
+          await this.delay(retryDecision.delayMs);
+          ctx.nodeRetryCount += 1;
+          ctx.buildRetryCount += 1;
+          this.transitionTo('RUNNING', ctx);
+          continue;
+        }
+
+        this.transitionTo('ATTEMPTING_REPAIR', ctx);
+
+        const plan: RepairPlan = this.autoRepairEngine.planRepair(failure);
+        this.metrics.repairAttempts.inc({ buildId: ctx.buildId, nodeId: ctx.nodeId });
+        await this.autoRepairEngine.executeRepair(
+          {
+            buildId: ctx.buildId,
+            nodeId: ctx.nodeId,
+            ...ctx.repairHooks
+          },
+          plan,
+        );
+
+        ctx.repairActionsApplied.push(...plan.actions);
+
+        const retryDecision = this.autoRestartEngine.decideRetry({
+          nodeRetryCount: ctx.nodeRetryCount,
+          buildRetryCount: ctx.buildRetryCount,
+        });
+
+        if (!retryDecision.shouldRetry) {
+          this.transitionTo('ESCALATING', ctx);
+          this.metrics.escalations.inc({ buildId: ctx.buildId, nodeId: ctx.nodeId });
+          await this.escalate(ctx, retryDecision.reason);
+          this.transitionTo('MANUAL_INTERVENTION', ctx);
+          return Promise.reject(error);
+        }
+
+        this.transitionTo('VALIDATING', ctx);
+
+        // Record metrics for retry after repair
+        this.metrics.nodeRetries.inc({ nodeId: ctx.nodeId });
+        this.metrics.buildRetries.inc({ buildId: ctx.buildId });
+
+        await this.delay(retryDecision.delayMs);
+        ctx.nodeRetryCount += 1;
+        ctx.buildRetryCount += 1;
+
+        this.transitionTo('RUNNING', ctx);
+        // loop back and re-run node
+      }
+    }
+  }
+
+  private async escalate(
+    ctx: OrchestratorContext,
+    reason: string,
+  ): Promise<void> {
+    const failure = ctx.failureEvent!;
+    const escalationEvent: EscalationEvent = {
+      type: 'ESCALATION',
+      buildId: ctx.buildId,
+      nodeId: ctx.nodeId,
+      state: 'ESCALATING',
+      failure,
+      repairActionsApplied: ctx.repairActionsApplied,
+      nodeRetryCount: ctx.nodeRetryCount,
+      buildRetryCount: ctx.buildRetryCount,
+      timestamp: new Date().toISOString(),
+      escalationReason: reason,
+      suggestedNextSteps: 'Inspect logs, consider manual rollback or node configuration change.',
+    };
+
+    await this.eventSink.emit(escalationEvent);
+  }
+
+  async requestManualIntervention(ctx: OrchestratorContext, owner?: string): Promise<void> {
+    const failure = ctx.failureEvent!;
+    const event: ManualInterventionEvent = {
+      type: 'MANUAL_INTERVENTION',
+      buildId: ctx.buildId,
+      nodeId: ctx.nodeId,
+      failure,
+      repairActionsApplied: ctx.repairActionsApplied,
+      nodeRetryCount: ctx.nodeRetryCount,
+      buildRetryCount: ctx.buildRetryCount,
+      timestamp: new Date().toISOString(),
+      owner,
+      notes: 'Manual intervention requested by orchestrator.',
+    };
+
+    this.metrics.manualInterventions.inc({ buildId: ctx.buildId, nodeId: ctx.nodeId });
+    this.transitionTo('MANUAL_INTERVENTION', ctx);
+    await this.eventSink.emit(event);
+  }
+
+  private async delay(ms: number): Promise<void> {
+    if (ms <= 0) return;
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

@@ -1,95 +1,140 @@
-import { FailureClassification, SymptomType, FailureCategory } from './types';
+// src/build-system/failure-detector.ts
+
+export type FailureCategory =
+  | 'TIMEOUT'
+  | 'CRASH'
+  | 'DRIFT'
+  | 'OOM'
+  | 'GPU_OOM'
+  | 'RESOURCE_SPIKE';
+
+export interface FailureMetrics {
+  durationMs?: number;
+  cpuPercent?: number;
+  memoryBytes?: number;
+  gpuMemoryBytes?: number;
+  ioWaitPercent?: number;
+  expectedHash?: string;
+  actualHash?: string;
+}
+
+export interface FailureEvent {
+  buildId: string;
+  nodeId: string;
+  category: FailureCategory;
+  anomalyScore: number; // 0–100
+  confidence: number;   // 0–1
+  metrics: FailureMetrics;
+  timestamp: string;
+  message?: string;
+}
+
+export interface ExecutionContext {
+  buildId: string;
+  nodeId: string;
+  startTime: number;
+  timeoutMs: number;
+  expectedHash?: string;
+}
+
+export interface FailureDetectorConfig {
+  timeoutThresholdFactor: number; // e.g. 1.0 = strict, >1.0 = lenient
+  anomalyScoreWeights: Partial<Record<keyof FailureMetrics, number>>;
+}
 
 export class FailureDetector {
-  private historicalAverages: Map<string, number> = new Map();
+  constructor(private readonly config: FailureDetectorConfig) {}
 
-  recordExecutionTime(nodeId: string, durationMs: number): void {
-    const currentAvg = this.historicalAverages.get(nodeId) || 0;
-    if (currentAvg === 0) {
-      this.historicalAverages.set(nodeId, durationMs);
-    } else {
-      // 80% weight on history, 20% on new data
-      this.historicalAverages.set(nodeId, currentAvg * 0.8 + durationMs * 0.2);
-    }
-  }
-
-  getHistoricalAverage(nodeId: string): number {
-    return this.historicalAverages.get(nodeId) || 500; // default to 500ms
-  }
-
-  classifyFailure(
-    nodeId: string,
-    executionTimeMs: number,
-    error?: Error | null,
-    resourceMetrics?: { cpuPercent?: number; memoryUsageBytes?: number; gpuMemoryUsageBytes?: number }
-  ): FailureClassification | null {
-    const symptoms: SymptomType[] = [];
-    const avg = this.getHistoricalAverage(nodeId);
-
-    // 1. Check for Timeout (Execution takes >2x historical average)
-    if (executionTimeMs > avg * 2) {
-      symptoms.push('execTimeExceeded');
-    }
-
-    // 2. Check for Error Symptoms
-    if (error) {
-      const msg = error.message.toLowerCase();
-      if (msg.includes('gpu out of memory') || msg.includes('cuda oom') || msg.includes('gpu oom') || msg.includes('out of memory on device')) {
-        symptoms.push('gpuOom');
-      } else if (msg.includes('out of memory') || msg.includes('oom') || msg.includes('heap limit') || msg.includes('allocation failed')) {
-        symptoms.push('oom');
-      } else if (msg.includes('dependency') || msg.includes('cannot find module') || msg.includes('version conflict') || msg.includes('unmet dependency')) {
-        symptoms.push('dependencyConflict');
-      } else if (msg.includes('lock') || msg.includes('resource busy') || msg.includes('eaddrinuse') || msg.includes('already in use')) {
-        symptoms.push('lockContention');
-      } else {
-        symptoms.push('noOutput');
-      }
-    }
-
-    // 3. Check for Resource Metrics
-    if (resourceMetrics) {
-      // Threshold memory OOM limit check (e.g. approaching 2GB limit)
-      if (resourceMetrics.memoryUsageBytes && resourceMetrics.memoryUsageBytes > 1.8 * 1024 * 1024 * 1024) {
-        symptoms.push('oom');
-      }
-      if (resourceMetrics.gpuMemoryUsageBytes && resourceMetrics.gpuMemoryUsageBytes > 4 * 1024 * 1024 * 1024) {
-        symptoms.push('gpuOom');
-      }
-    }
-
-    if (symptoms.length === 0) {
+  detectTimeout(ctx: ExecutionContext, endTime: number): FailureEvent | null {
+    const durationMs = endTime - ctx.startTime;
+    if (durationMs <= ctx.timeoutMs * this.config.timeoutThresholdFactor) {
       return null;
     }
 
-    // Determine default category, confidence, and anomaly scores
-    let category: FailureCategory = 'crash';
-    let confidence = 0.5;
-    let anomalyScore = 50;
+    const metrics: FailureMetrics = { durationMs };
+    const anomalyScore = this.computeAnomalyScore(metrics);
+    const confidence = 0.9;
 
-    if (symptoms.includes('oom') || symptoms.includes('gpuOom') || symptoms.includes('lockContention')) {
-      category = 'resource';
-      confidence = 0.9;
-      anomalyScore = symptoms.includes('oom') || symptoms.includes('gpuOom') ? 95 : 80;
-    } else if (symptoms.includes('execTimeExceeded')) {
-      category = 'timeout';
-      confidence = 0.85;
-      anomalyScore = Math.min(100, Math.round((executionTimeMs / avg) * 20));
-    } else if (symptoms.includes('dependencyConflict')) {
-      category = 'crash';
-      confidence = 0.95;
-      anomalyScore = 90;
-    } else if (error) {
-      category = 'crash';
-      confidence = 0.8;
-      anomalyScore = 75;
+    return {
+      buildId: ctx.buildId,
+      nodeId: ctx.nodeId,
+      category: 'TIMEOUT',
+      anomalyScore,
+      confidence,
+      metrics,
+      timestamp: new Date().toISOString(),
+      message: `Node ${ctx.nodeId} exceeded timeout (${durationMs}ms > ${ctx.timeoutMs}ms)`,
+    };
+  }
+
+  detectCrash(
+    ctx: ExecutionContext,
+    error: Error,
+    metrics: Partial<FailureMetrics> = {},
+  ): FailureEvent {
+    const anomalyScore = Math.max(100, this.computeAnomalyScore(metrics));
+    const confidence = 0.95;
+
+    let category: FailureCategory = 'CRASH';
+    if (error.message.toLowerCase().includes('cuda out of memory')) {
+      category = 'GPU_OOM';
+    } else if (error.message.toLowerCase().includes('out of memory')) {
+      category = 'OOM';
     }
 
     return {
+      buildId: ctx.buildId,
+      nodeId: ctx.nodeId,
       category,
-      confidence,
       anomalyScore,
-      symptoms,
+      confidence,
+      metrics,
+      timestamp: new Date().toISOString(),
+      message: `Node ${ctx.nodeId} crashed: ${error.message}`,
     };
+  }
+
+  detectDrift(
+    ctx: ExecutionContext,
+    expectedHash: string,
+    actualHash: string,
+  ): FailureEvent | null {
+    if (expectedHash === actualHash) return null;
+
+    const metrics: FailureMetrics = { expectedHash, actualHash };
+    const anomalyScore = this.computeAnomalyScore(metrics);
+    const confidence = 0.9;
+
+    return {
+      buildId: ctx.buildId,
+      nodeId: ctx.nodeId,
+      category: 'DRIFT',
+      anomalyScore,
+      confidence,
+      metrics,
+      timestamp: new Date().toISOString(),
+      message: `Output drift detected for node ${ctx.nodeId}`,
+    };
+  }
+
+  private computeAnomalyScore(metrics: Partial<FailureMetrics>): number {
+    const weights = this.config.anomalyScoreWeights;
+    let score = 0;
+
+    for (const key of Object.keys(weights) as (keyof FailureMetrics)[]) {
+      const weight = weights[key] ?? 0;
+      const value = metrics[key];
+
+      if (typeof value === 'number') {
+        score += weight * this.normalizeMetric(value);
+      }
+    }
+
+    return Math.min(100, Math.max(0, score));
+  }
+
+  private normalizeMetric(value: number): number {
+    // Placeholder: plug in z-score or domain-specific normalization later
+    return (Math.min(10, value) / 10) * 100;
   }
 }

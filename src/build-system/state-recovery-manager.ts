@@ -1,97 +1,85 @@
-import { Checkpoint } from './types';
+// src/build-system/state-recovery-manager.ts
+
+export interface CheckpointId {
+  buildId: string;
+  nodeId?: string;
+  subtreeRootId?: string;
+}
+
+export interface SerializedState {
+  // opaque blob; you decide the shape
+  data: unknown;
+  createdAt: string;
+}
+
+export interface StateStore {
+  save(id: CheckpointId, state: SerializedState): Promise<void>;
+  load(id: CheckpointId): Promise<SerializedState | null>;
+  delete(id: CheckpointId): Promise<void>;
+}
+
+export class InMemoryStateStore implements StateStore {
+  private readonly store = new Map<string, SerializedState>();
+
+  private getKey(id: CheckpointId): string {
+    return `${id.buildId}:${id.nodeId || 'none'}:${id.subtreeRootId || 'none'}`;
+  }
+
+  async save(id: CheckpointId, state: SerializedState): Promise<void> {
+    this.store.set(this.getKey(id), state);
+  }
+
+  async load(id: CheckpointId): Promise<SerializedState | null> {
+    return this.store.get(this.getKey(id)) || null;
+  }
+
+  async delete(id: CheckpointId): Promise<void> {
+    this.store.delete(this.getKey(id));
+  }
+
+  // for testing
+  getSize(): number {
+    return this.store.size;
+  }
+}
 
 export class StateRecoveryManager {
-  private checkpoints: Map<string, Checkpoint[]> = new Map();
+  constructor(private readonly store: StateStore) {}
 
-  createCheckpoint(
-    buildId: string,
-    nodeId: string,
-    layer: number,
-    nodeResults: Map<string, any>
-  ): Checkpoint {
-    const checkpointId = `chk-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const resultsCopy = JSON.parse(
-      JSON.stringify(
-        Array.from(nodeResults.entries()).reduce((acc, [k, v]) => {
-          acc[k] = v;
-          return acc;
-        }, {} as Record<string, any>)
-      )
-    );
-
-    const checkpoint: Checkpoint = {
-      checkpoint_id: checkpointId,
-      build_id: buildId,
-      node_id: nodeId,
-      layer,
-      node_results: resultsCopy,
-      timestamp: new Date().toISOString(),
+  async saveCheckpoint(id: CheckpointId, state: unknown): Promise<void> {
+    const serialized: SerializedState = {
+      data: state,
+      createdAt: new Date().toISOString(),
     };
 
-    const list = this.checkpoints.get(buildId) || [];
-    list.push(checkpoint);
-    this.checkpoints.set(buildId, list);
-
-    return checkpoint;
+    await this.store.save(id, serialized);
   }
 
-  getLatestCheckpoint(buildId: string): Checkpoint | undefined {
-    const list = this.checkpoints.get(buildId);
-    if (!list || list.length === 0) return undefined;
-    return list[list.length - 1];
+  async restoreCheckpoint(id: CheckpointId): Promise<SerializedState | null> {
+    return this.store.load(id);
   }
 
-  rollbackLevel1(
-    buildId: string,
-    nodeId: string,
-    nodeResults: Map<string, any>,
-    dryRun = false
-  ): { affectedNodes: string[]; committed: boolean } {
-    const affectedNodes = [nodeId];
-    if (!dryRun) {
-      nodeResults.delete(nodeId);
-    }
-    return { affectedNodes, committed: !dryRun };
+  async rollbackLevel1(buildId: string, nodeId: string): Promise<void> {
+    const id: CheckpointId = { buildId, nodeId };
+    const checkpoint = await this.store.load(id);
+    if (!checkpoint) return;
+
+    // TODO: apply checkpoint.data back into your graph engine
   }
 
-  rollbackLevel2(
-    buildId: string,
-    nodeId: string,
-    nodeResults: Map<string, any>,
-    dagNodes: { id: string; depends_on: string[] }[],
-    dryRun = false
-  ): { affectedNodes: string[]; committed: boolean } {
-    const affectedNodes: string[] = [nodeId];
+  async rollbackLevel2(buildId: string, subtreeRootId: string): Promise<void> {
+    const id: CheckpointId = { buildId, subtreeRootId };
+    const checkpoint = await this.store.load(id);
+    if (!checkpoint) return;
 
-    // Cascading downstream traversal to find dependents
-    const findDependents = (currentId: string) => {
-      for (const node of dagNodes) {
-        if (node.depends_on.includes(currentId) && !affectedNodes.includes(node.id)) {
-          affectedNodes.push(node.id);
-          findDependents(node.id);
-        }
-      }
-    };
-    findDependents(nodeId);
-
-    if (!dryRun) {
-      for (const id of affectedNodes) {
-        nodeResults.delete(id);
-      }
-    }
-
-    return { affectedNodes, committed: !dryRun };
+    // TODO: apply subtree checkpoint to graph engine
   }
 
-  rollbackLevel3(
-    buildId: string,
-    nodeResults: Map<string, any>,
-    dryRun = false
-  ): { affectedNodes: string[]; committed: boolean } {
-    const affectedNodes = Array.from(nodeResults.keys());
-    if (!dryRun) {
-      nodeResults.clear();
-    }
-    return { affectedNodes, committed: !dryRun };
+  async rollbackLevel3(buildId: string): Promise<void> {
+    const id: CheckpointId = { buildId };
+    const checkpoint = await this.store.load(id);
+    if (!checkpoint) return;
+
+    // TODO: reset entire build graph and caches from checkpoint
   }
 }
