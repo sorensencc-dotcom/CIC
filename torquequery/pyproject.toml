@@ -1,0 +1,17 @@
+[project]
+name = "torquequery"
+version = "0.1.0-alpha"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "llama-index",
+  "chromadb",
+  "sentence-transformers",
+  "tiktoken",
+  "pyyaml",
+]
+
+[tool.uvicorn]
+app = "src.main:app"
+host = "0.0.0.0"
+port = 8000
