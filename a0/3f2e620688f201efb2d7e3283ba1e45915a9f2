@@ -1,0 +1,19 @@
+src/planning/CostModel.ts
+  s_d56352375308c6::t_a5ad91f19207d3 17,19-24,30-40,44-67,71,75-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "a03f2e620688f201efb2d7e3283ba1e45915a9f2",
+  "prompts": {},
+  "sessions": {
+    "s_d56352375308c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a425f21-d8b9-4736-9496-1ad596b09055",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
