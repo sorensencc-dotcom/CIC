@@ -1,9 +1,8 @@
-from sentence_transformers import CrossEncoder
-
 _reranker = None
 
 def init_reranker(model_name: str):
     global _reranker
+    from sentence_transformers import CrossEncoder
     _reranker = CrossEncoder(model_name)
 
 def rerank_semantic(question: str, source_nodes, top_k: int):

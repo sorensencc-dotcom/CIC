@@ -1,4 +1,4 @@
-.PHONY: ingest serve test
+.PHONY: ingest serve test watch
 
 PYTHON := python3
 
@@ -10,3 +10,6 @@ serve:
 
 test:
 	pytest -q
+
+watch:
+	$(PYTHON) scripts/watch.py

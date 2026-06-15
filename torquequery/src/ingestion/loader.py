@@ -21,8 +21,8 @@ def load_documents(docs_root: str, mkdocs_yml: str):
                 metadata={
                     "file_path": rel,
                     "title": fm.get("title", path.name),
-                    "tags": fm.get("tags", []),
-                    "mkdocs_section": section,
+                    "tags": ",".join(fm.get("tags", [])),
+                    "mkdocs_section": ",".join(section),
                     "mkdocs_path": " > ".join(section),
                 },
             )

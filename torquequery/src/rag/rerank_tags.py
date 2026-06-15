@@ -10,7 +10,8 @@ def tag_aware_rerank(source_nodes, task_labels, base_weight=1.0, tag_boost=0.3):
     ranked = []
     for sn in source_nodes:
         base = sn.score or 0.0
-        tags = sn.node.metadata.get("tags", [])
+        tags_raw = sn.node.metadata.get("tags", "")
+        tags = [t for t in tags_raw.split(",") if t] if isinstance(tags_raw, str) else tags_raw
         ov = tag_overlap_score(tags, task_labels)
         final = base * (base_weight + tag_boost * ov)
         ranked.append((sn, final))

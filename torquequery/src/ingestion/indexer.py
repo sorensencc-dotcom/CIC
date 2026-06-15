@@ -1,17 +1,21 @@
+import chromadb
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.core import StorageContext, VectorStoreIndex, Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 
+COLLECTION_NAME = "torquequery"
+
 def configure_models(llm_model: str, embed_model: str):
     Settings.llm = Ollama(model=llm_model)
-    Settings.embed_model = OllamaEmbedding(model=embed_model)
+    Settings.embed_model = OllamaEmbedding(model_name=embed_model)
 
 def build_storage(chroma_dir: str):
-    vs = ChromaVectorStore(persist_dir=chroma_dir)
+    client = chromadb.PersistentClient(path=chroma_dir)
+    collection = client.get_or_create_collection(COLLECTION_NAME)
+    vs = ChromaVectorStore(chroma_collection=collection)
     return StorageContext.from_defaults(vector_store=vs)
 
 def build_index(nodes, storage_context):
-    index = VectorStoreIndex.from_nodes(nodes, storage_context=storage_context)
-    index.storage_context.vector_store.persist()
+    index = VectorStoreIndex(nodes, storage_context=storage_context)
     return index

@@ -1,4 +1,4 @@
-from llama_index.core import load_index_from_storage, Settings
+from llama_index.core import VectorStoreIndex, Settings
 from llama_index.llms.ollama import Ollama
 from llama_index.embeddings.ollama import OllamaEmbedding
 from src.ingestion.indexer import build_storage
@@ -8,13 +8,13 @@ from src.rag.rerank_tags import tag_aware_rerank
 from src.rag.context import pack_context
 
 def init_runtime(cfg):
-    Settings.llm = Ollama(model=cfg["models"]["llm"])
-    Settings.embed_model = OllamaEmbedding(model=cfg["models"]["embedding"])
+    Settings.llm = Ollama(model=cfg["models"]["llm"], request_timeout=300.0)
+    Settings.embed_model = OllamaEmbedding(model_name=cfg["models"]["embedding"], request_timeout=300.0)
     init_reranker(cfg["models"]["reranker"])
 
 def init_query_engine(cfg):
     storage = build_storage(cfg["paths"]["chroma_dir"])
-    index = load_index_from_storage(storage)
+    index = VectorStoreIndex.from_vector_store(storage.vector_store)
     return index.as_query_engine(similarity_top_k=cfg["retrieval"]["top_k"], response_mode="compact")
 
 def format_json_answer(answer_text, nodes):
@@ -24,7 +24,7 @@ def format_json_answer(answer_text, nodes):
             {
                 "file": n.node.metadata.get("file_path", ""),
                 "section": n.node.metadata.get("mkdocs_path", ""),
-                "tags": n.node.metadata.get("tags", []),
+                "tags": [t for t in n.node.metadata.get("tags", "").split(",") if t],
                 "score": float(n.score or 0.0),
             }
             for n in nodes
