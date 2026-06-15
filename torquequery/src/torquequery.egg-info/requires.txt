@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+llama-index
+chromadb
+sentence-transformers
+tiktoken
+pyyaml
