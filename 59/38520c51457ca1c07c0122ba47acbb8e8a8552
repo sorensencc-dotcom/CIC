@@ -1,0 +1,25 @@
+Dockerfile.planning-engine
+  s_d56352375308c6::t_bef5bb7600197a 1-26
+src/planning/AutoschedulerV2.ts
+  s_d56352375308c6::t_77ba9ea704fb43 19-23,25-26,35-110,114-134,142-202
+src/planning/PhaseCostEstimator.ts
+  s_d56352375308c6::t_97504a075cc7e4 16-58,61-74,78-82,86-129
+src/planning/RoadmapDeltaSynthesizer.ts
+  s_d56352375308c6::t_16dfbe4266d942 22-23,31-81,85-122,125-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "5938520c51457ca1c07c0122ba47acbb8e8a8552",
+  "prompts": {},
+  "sessions": {
+    "s_d56352375308c6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5a425f21-d8b9-4736-9496-1ad596b09055",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
