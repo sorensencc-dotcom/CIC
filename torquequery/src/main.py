@@ -45,8 +45,15 @@ async def lifespan(app: FastAPI):
     import asyncio
 
     def _init():
-        init_runtime(cfg)
-        _state["qe"] = init_query_engine(cfg)
+        try:
+            init_runtime(cfg)
+            _state["qe"] = init_query_engine(cfg)
+            print("INFO:     TorqueQuery engine initialization complete.", flush=True)
+        except Exception as e:
+            import traceback
+            print("ERROR:    TorqueQuery engine initialization failed!", flush=True)
+            traceback.print_exc()
+            _state["init_error"] = str(e)
 
     loop = asyncio.get_event_loop()
     # Fire init in background thread — don't await so port binds immediately
@@ -76,7 +83,10 @@ class Query(BaseModel):
 def query(req: Query):
     qe = _state.get("qe")
     if qe is None:
-        raise HTTPException(status_code=503, detail="Service initializing, retry in a moment")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service initializing. Error: {_state.get('init_error', 'None')}"
+        )
     return answer(cfg, qe, req.question, req.taskLabels or [])
 
 @app.post("/ingest")
@@ -89,6 +99,7 @@ def ingest():
 def health():
     return {
         "status": "healthy" if _state.get("qe") else "initializing",
+        "error": _state.get("init_error"),
         "version": "0.1.0-alpha",
         "models": cfg["models"],
         "config": {

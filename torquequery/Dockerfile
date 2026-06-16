@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy pyproject.toml and README first to cache dependency installs
 COPY pyproject.toml README.md ./
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -e .
 
 # Copy source code and configs

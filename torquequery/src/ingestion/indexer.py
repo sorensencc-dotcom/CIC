@@ -7,8 +7,10 @@ from llama_index.embeddings.ollama import OllamaEmbedding
 COLLECTION_NAME = "torquequery"
 
 def configure_models(llm_model: str, embed_model: str):
-    Settings.llm = Ollama(model=llm_model)
-    Settings.embed_model = OllamaEmbedding(model_name=embed_model)
+    import os
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    Settings.llm = Ollama(model=llm_model, base_url=ollama_host)
+    Settings.embed_model = OllamaEmbedding(model_name=embed_model, base_url=ollama_host)
 
 def build_storage(chroma_dir: str):
     client = chromadb.PersistentClient(path=chroma_dir)

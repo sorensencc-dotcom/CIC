@@ -8,8 +8,10 @@ from src.rag.rerank_tags import tag_aware_rerank
 from src.rag.context import pack_context
 
 def init_runtime(cfg):
-    Settings.llm = Ollama(model=cfg["models"]["llm"], request_timeout=300.0)
-    Settings.embed_model = OllamaEmbedding(model_name=cfg["models"]["embedding"], request_timeout=300.0)
+    import os
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    Settings.llm = Ollama(model=cfg["models"]["llm"], base_url=ollama_host, request_timeout=300.0)
+    Settings.embed_model = OllamaEmbedding(model_name=cfg["models"]["embedding"], base_url=ollama_host, request_timeout=300.0)
     init_reranker(cfg["models"]["reranker"])
 
 def init_query_engine(cfg):
