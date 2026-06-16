@@ -18,6 +18,32 @@ def init_query_engine(cfg):
     return index.as_query_engine(similarity_top_k=cfg["retrieval"]["top_k"], response_mode="compact")
 
 def format_json_answer(answer_text, nodes):
+    # Detect if the LLM states that the answer isn't available in the documents
+    not_in_docs_triggers = [
+        "not in the docs",
+        "not in the documentation",
+        "not mentioned",
+        "not found",
+        "does not contain",
+        "does not mention",
+        "no information",
+        "not in the provided",
+        "i cannot find",
+        "i do not have",
+        "is not described",
+        "is not specified",
+        "there is no mention",
+    ]
+    
+    answer_lower = answer_text.lower()
+    not_in_docs = any(trigger in answer_lower for trigger in not_in_docs_triggers)
+    
+    # Calculate confidence based on maximum retrieved and reranked node score
+    if nodes and not not_in_docs:
+        confidence = float(max(n.score or 0.0 for n in nodes))
+    else:
+        confidence = 0.0
+
     return {
         "answer": answer_text,
         "sources": [
@@ -29,8 +55,8 @@ def format_json_answer(answer_text, nodes):
             }
             for n in nodes
         ],
-        "confidence": 0.0,
-        "not_in_docs": False,
+        "confidence": confidence,
+        "not_in_docs": not_in_docs,
     }
 
 def answer(cfg, query_engine, question: str, task_labels=None):
