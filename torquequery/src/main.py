@@ -32,11 +32,14 @@ class ConnectionManager:
 
     async def broadcast_to_session(self, session_id: str, message: dict):
         if session_id in self.active_connections:
+            failed_connections = []
             for connection in self.active_connections[session_id]:
                 try:
                     await connection.send_json(message)
                 except Exception:
-                    pass
+                    failed_connections.append(connection)
+            for connection in failed_connections:
+                self.disconnect(session_id, connection)
 
 manager = ConnectionManager()
 
@@ -44,10 +47,11 @@ manager = ConnectionManager()
 async def lifespan(app: FastAPI):
     import asyncio
 
-    def _init():
+    async def _init():
         try:
-            init_runtime(cfg)
-            _state["qe"] = init_query_engine(cfg)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, init_runtime, cfg)
+            _state["qe"] = await loop.run_in_executor(None, init_query_engine, cfg)
             print("INFO:     TorqueQuery engine initialization complete.", flush=True)
         except Exception as e:
             import traceback
@@ -55,13 +59,16 @@ async def lifespan(app: FastAPI):
             traceback.print_exc()
             _state["init_error"] = str(e)
 
-    loop = asyncio.get_event_loop()
-    # Fire init in background thread — don't await so port binds immediately
-    _state["_init_task"] = loop.run_in_executor(None, _init)
+    # Fire init in background task — don't await so port binds immediately
+    _state["_init_task"] = asyncio.create_task(_init())
     yield
     # Clean up on shutdown
     if not _state["_init_task"].done():
         _state["_init_task"].cancel()
+        try:
+            await _state["_init_task"]
+        except asyncio.CancelledError:
+            pass
     _state.clear()
 
 app = FastAPI(lifespan=lifespan)
