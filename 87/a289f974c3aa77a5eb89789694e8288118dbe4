@@ -1,0 +1,26 @@
+torquequery/src/utils/validation.py
+  s_e705c2172b6489::t_2d1c57ded1de75 1-113
+torquequery/tests/test_validation.py
+  s_e705c2172b6489::t_2bd85468e82d11 1-192
+torquequery/src/main.py
+  s_e705c2172b6489::t_b2a00433b90049 663-668,671
+  s_e705c2172b6489::t_f7a30cf8627da1 129-134,141
+  s_e705c2172b6489::t_eb276d317db512 426-432
+  s_e705c2172b6489::t_0a8f9cea1e21bd 572-579,581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "87a289f974c3aa77a5eb89789694e8288118dbe4",
+  "prompts": {},
+  "sessions": {
+    "s_e705c2172b6489": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55c3ba62-7bef-4512-9cc5-6e337a2f342e",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
