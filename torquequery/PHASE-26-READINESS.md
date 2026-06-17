@@ -39,7 +39,7 @@
 - [x] CIC agent manifest created
 - [x] Agent wrapper added to CIC graph
 - [ ] CIC orchestrator checks TorqueQuery before remote LLM
-- [ ] CIC autoscheduler rule added (nightly ingestion)
+- [x] CIC autoscheduler rule added (nightly ingestion)
 
 ## F. Determinism & Stability
 - [x] All model versions pinned
