@@ -1,0 +1,22 @@
+torquequery/src/fs/orchestrator.py
+  s_e705c2172b6489::t_569a6f7b58a9c0 139-142,153-160,164
+  s_e705c2172b6489::t_0c884a27b07a18 294,296-298,300-339
+torquequery/src/main.py
+  s_e705c2172b6489::t_e2a92b55f52be3 393-398,401,407
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "590076e648d4639913c67a587990f5f5c769cfd1",
+  "prompts": {},
+  "sessions": {
+    "s_e705c2172b6489": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "55c3ba62-7bef-4512-9cc5-6e337a2f342e",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
