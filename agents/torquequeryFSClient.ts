@@ -136,3 +136,16 @@ export class TorqueQueryFSClient implements ITorqueQueryFS, ISpecTools, IPDFTool
     return this.request<SearchSnippet>("/api/fs/pdf/search", { user, pdfPath, query });
   }
 }
+
+import { FSTraversalPolicy } from "./fsTraversalPolicy";
+
+export const fsClient = new TorqueQueryFSClient("http://localhost:8000");
+
+export const TorqueQueryFSLocal = {
+  name: "TorqueQueryFSLocal",
+  description: "Virtual FS-aware local documentation resolver",
+  run: async ({ question, user }: { question: string; user: UserContext }) => {
+    const policy = new FSTraversalPolicy(fsClient, fsClient, fsClient);
+    return await policy.answer(user, question);
+  }
+};
