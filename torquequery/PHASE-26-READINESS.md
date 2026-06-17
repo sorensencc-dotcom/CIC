@@ -38,7 +38,7 @@
 - [x] TypeScript SDK generated
 - [x] CIC agent manifest created
 - [x] Agent wrapper added to CIC graph
-- [ ] CIC orchestrator checks TorqueQuery before remote LLM
+- [x] CIC orchestrator checks TorqueQuery before remote LLM
 - [x] CIC autoscheduler rule added (nightly ingestion)
 
 ## F. Determinism & Stability
@@ -53,4 +53,4 @@
 - [x] `make serve` starts server
 - [x] `/health` returns healthy
 - [x] `/query` returns valid JSON
-- [ ] CIC agent successfully resolves a real doc question
+- [x] CIC agent successfully resolves a real doc question
