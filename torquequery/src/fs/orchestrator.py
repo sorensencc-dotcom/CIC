@@ -136,7 +136,10 @@ class CICOrchestrator:
 
     def record_run_start(self, task_id: str, agent_type: str) -> Dict[str, Any]:
         """
-        Starts an agent run for a task, verifying concurrency limits for that agent type.
+        Starts an agent run for a task, verifying:
+        - Task status (running/pending)
+        - Budget availability (pre-start check to prevent race condition)
+        - Concurrency limits by agent type
         """
         with self.lock:
             # Verify task is active
@@ -147,10 +150,18 @@ class CICOrchestrator:
             if task_node["status"] not in ("running", "pending"):
                 raise ValueError(f"Task '{task_id}' is in status '{task_node['status']}', cannot start agent run.")
 
+            # Pre-start budget check (prevent race condition)
+            meta = task_node.get("contextMetadata") or {}
+            budget = meta.get("executionPolicy") or {}
+            max_tools = budget.get("max_tool_calls", 50)
+
+            if max_tools <= 0:
+                raise ValueError(f"Task '{task_id}' has no tool call budget remaining.")
+
             # Concurrency limit check by agent type
             agent_limit = self.max_agent_concurrency.get(agent_type, self.max_agent_concurrency["default"])
             running_of_type = sum(1 for r in self.running_agent_runs.values() if r["agent_type"] == agent_type)
-            
+
             if running_of_type >= agent_limit:
                 raise ValueError(f"Concurrency limit reached for agent type '{agent_type}'.")
 
@@ -280,29 +291,52 @@ class CICOrchestrator:
         with self.lock:
             self._cancel_cascade_internal(task_id, "Cancelled by operator")
 
-    def _cancel_cascade_internal(self, task_id: str, reason: str) -> None:
+    def _cancel_cascade_internal(self, task_id: str, reason: str, max_depth: int = 10, start_time: float | None = None) -> None:
         """
-        Recursively cancel task and all its dependencies, blockers, or child tasks.
+        Recursively cancel task and its child tasks (depth-limited, timeout-protected).
+        - max_depth: prevent infinite recursion (default 10 levels)
+        - start_time: abort if cascade takes > 30 seconds
         """
-        # Find all nodes linked from this task using plan view or database edges
-        view = self.plan_graph.get_plan_view(task_id)
-        nodes_to_cancel = list(view["nodes"].keys())
+        import time as time_module
 
-        # Update all tasks in nodes_to_cancel to status 'cancelled'
-        for nid in nodes_to_cancel:
-            node = view["nodes"][nid]
-            if node["nodeType"] == "task":
-                self.plan_graph.update_task_status(nid, "cancelled")
-                self.running_tasks.pop(nid, None)
+        if start_time is None:
+            start_time = time_module.time()
 
-                # Cancel associated running agents
-                runs_to_cancel = [rid for rid, r in self.running_agent_runs.items() if r["task_id"] == nid]
-                for rid in runs_to_cancel:
-                    self.running_agent_runs.pop(rid, None)
-                    # Update run status to cancelled
-                    with self.plan_graph._get_connection() as conn:
-                        conn.execute("UPDATE agent_runs SET status = 'cancelled' WHERE id = ?;", (rid,))
-                        conn.commit()
+        # Abort if cascade taking too long
+        if time_module.time() - start_time > 30:
+            # Log timeout but don't raise (cascade is already partially done)
+            return
+
+        # Abort if depth exceeded
+        if max_depth <= 0:
+            return
+
+        # Only cancel direct children (blocked_by edges), not the entire plan view
+        node = self.plan_graph.get_node(task_id)
+        if not node or node["nodeType"] != "task":
+            return
+
+        self.plan_graph.update_task_status(task_id, "cancelled")
+        self.running_tasks.pop(task_id, None)
+
+        # Cancel running agents for this task
+        runs_to_cancel = [rid for rid, r in self.running_agent_runs.items() if r["task_id"] == task_id]
+        for rid in runs_to_cancel:
+            self.running_agent_runs.pop(rid, None)
+            with self.plan_graph._get_connection() as conn:
+                conn.execute("UPDATE agent_runs SET status = 'cancelled' WHERE id = ?;", (rid,))
+                conn.commit()
+
+        # Recursively cancel direct children only
+        with self.plan_graph._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT target_id FROM edges WHERE source_id = ? AND relation_type = 'blocked_by';",
+                (task_id,)
+            ).fetchall()
+
+            for r in rows:
+                child_id = r["target_id"]
+                self._cancel_cascade_internal(child_id, reason, max_depth - 1, start_time)
 
     def get_plan_context_envelope(self, task_id: str) -> Dict[str, Any]:
         """

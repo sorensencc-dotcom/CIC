@@ -390,13 +390,21 @@ class PDFSearchRequest(BaseModel):
 
 # Helper for RBAC Validation
 def _validate_path_rbac(user: UserContextModel, path: str) -> dict:
+    if not user or not user.groups:
+        raise HTTPException(
+            status_code=401,
+            detail="User context required. Missing userId or groups."
+        )
+
     normalized_path = path.replace("\\", "/").strip("/")
     path_set, _, meta_map = fs_runtime.get_pruned_fs(user.groups, is_admin=False)
+
     if normalized_path not in path_set:
         raise HTTPException(
             status_code=403,
             detail=f"Access denied or resource '{path}' not found under current RBAC context."
         )
+
     return meta_map[normalized_path]
 
 
