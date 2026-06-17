@@ -65,9 +65,75 @@ class SimpleBM25:
             
         return score
 
+import os
+from src.fs.plan_graph import PlanGraphStore
+
 class QueryPlanner:
     def __init__(self, chroma_dir: str):
         self.chroma_dir = chroma_dir
+        self.plan_db_path = os.path.abspath(os.path.join(chroma_dir, "..", "plan_graph.db"))
+
+    def hybrid_search(
+        self,
+        query: str,
+        path_set: Set[str],
+        path_prefix: Optional[str] = None,
+        max_results: int = 10
+    ) -> Dict[str, Any]:
+        """
+        Runs a hybrid search combining virtual FS document search and Plan Graph entity search.
+        """
+        # 1. FS docs search
+        doc_matches = self.search(
+            query=query,
+            mode="semantic",
+            path_set=path_set,
+            path_prefix=path_prefix,
+            max_results=max_results
+        )
+
+        # 2. Plan Graph search
+        tasks = []
+        decisions = []
+        artifacts = []
+
+        try:
+            if os.path.exists(self.plan_db_path):
+                store = PlanGraphStore(self.plan_db_path)
+                # Search tasks
+                tasks = store.search_tasks(query)
+                tasks = tasks[:max_results]
+
+                # Search decisions
+                with store._get_connection() as conn:
+                    rows = conn.execute("""
+                        SELECT d.*, t.title as task_title FROM decisions d
+                        JOIN tasks t ON d.task_id = t.id
+                        WHERE d.rationale LIKE ? OR d.chosen_option LIKE ? OR d.options_considered LIKE ?;
+                    """, (f"%{query}%", f"%{query}%", f"%{query}%")).fetchall()
+                    for r in rows:
+                        decisions.append(store._row_to_dict(r, "decision"))
+                decisions = decisions[:max_results]
+
+                # Search artifacts
+                with store._get_connection() as conn:
+                    rows = conn.execute("""
+                        SELECT * FROM artifacts
+                        WHERE path LIKE ? OR type LIKE ?;
+                    """, (f"%{query}%", f"%{query}%")).fetchall()
+                    for r in rows:
+                        artifacts.append(store._row_to_dict(r, "artifact"))
+                artifacts = artifacts[:max_results]
+        except Exception as e:
+            print(f"Warning: Failed plan graph search in hybrid_search: {str(e)}")
+
+        return {
+            "documents": doc_matches,
+            "tasks": tasks,
+            "decisions": decisions,
+            "artifacts": artifacts
+        }
+
 
     def search(
         self,

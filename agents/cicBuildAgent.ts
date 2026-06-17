@@ -1,6 +1,8 @@
-import { UserContext, TraversalResult } from "../torquequery-sdk/fs";
+import { UserContext } from "../torquequery-sdk/fs";
+import { TraversalResult } from "./fsTraversalPolicy";
 import { fsClient } from "./torquequeryFSClient";
 import { FSTraversalPolicy } from "./fsTraversalPolicy";
+import { planClient } from "./torquequeryPlanClient";
 
 export interface BuildFailure {
   step: string;          // "compile", "test", "deploy", "lint", etc.
@@ -110,4 +112,91 @@ export class CICBuildAgent {
     const fsResult = await this.policy.answer(user, query);
     return synthesizeBuildReport(failure, fsResult);
   }
+
+  /**
+   * Pre-execution reasoning hook: builds a system prompt seeding string from prior decisions, runs, blockers and sibling artifacts.
+   */
+  async preExecution(taskId: string): Promise<string> {
+    try {
+      const env = await planClient.getPlanContextEnvelope(taskId);
+      const parts: string[] = [];
+
+      parts.push("=== PLAN CONTEXT ENVELOPE ===");
+      parts.push(`Current Task ID: ${env.currentTaskId}`);
+      if (env.parentTask) {
+        parts.push(`Parent Task: "${env.parentTask.title}" (${env.parentTask.status})`);
+      }
+
+      if (env.taskHistory && env.taskHistory.length > 0) {
+        parts.push("\n--- Task History & Prior Decisions ---");
+        for (const entry of env.taskHistory) {
+          parts.push(`* Task: "${entry.task.title}" (Status: ${entry.task.status})`);
+          
+          if (entry.decisions && entry.decisions.length > 0) {
+            parts.push("  Decisions:");
+            for (const dec of entry.decisions) {
+              parts.push(`  - Chosen Option: ${dec.chosenOption}. Rationale: ${dec.rationale}`);
+            }
+          }
+          
+          if (entry.runs && entry.runs.length > 0) {
+            parts.push("  Agent Runs:");
+            for (const run of entry.runs) {
+              parts.push(`  - Agent: ${run.agentType}, Status: ${run.status}`);
+              if (run.executionTrace) {
+                parts.push(`    Trace: ${JSON.stringify(run.executionTrace)}`);
+              }
+            }
+          }
+        }
+
+        // Generate constraints from failures
+        const failedRuns = env.taskHistory
+          .flatMap(e => e.runs)
+          .filter(r => r.status === "failed");
+        if (failedRuns.length > 0) {
+          parts.push("\n!!! CRITICAL CONSTRAINTS !!!");
+          parts.push("Do NOT repeat the following prior failed actions/configurations:");
+          for (const r of failedRuns) {
+            parts.push(`- Avoid failure from run ${r.id} (${r.agentType}): ${JSON.stringify(r.executionTrace)}`);
+          }
+        }
+      }
+
+      if (env.contextArtifacts && env.contextArtifacts.length > 0) {
+        parts.push("\n--- Sibling & Ancestor Output Artifacts ---");
+        parts.push("You can reuse/reference the following outputs from other tasks:");
+        for (const art of env.contextArtifacts) {
+          parts.push(`- Path: ${art.path} (Type: ${art.type})`);
+        }
+      }
+
+      if (env.activeBlockers && env.activeBlockers.length > 0) {
+        parts.push("\n--- Active Blockers ---");
+        for (const blk of env.activeBlockers) {
+          parts.push(`- Blocked by task: "${(blk as any).title}" (${(blk as any).status})`);
+        }
+      }
+
+      parts.push("=============================");
+      return parts.join("\n");
+    } catch (err) {
+      console.warn("Failed to retrieve plan context envelope, running without plan context:", err);
+      return "=== No Plan Context Available ===";
+    }
+  }
+
+  /**
+   * Process a build failure context with plan-aware prior execution envelopes and constraints.
+   */
+  async handleBuildFailurePlanAware(user: UserContext, failure: BuildFailure, taskId: string): Promise<BuildReport> {
+    const planPrompt = await this.preExecution(taskId);
+    const rawQuery = buildFailureQuery(failure);
+    
+    // Inject plan context directly into the query context
+    const hybridQuery = `${planPrompt}\n\nBuild failure to address:\n${rawQuery}`;
+    const fsResult = await this.policy.answer(user, hybridQuery);
+    return synthesizeBuildReport(failure, fsResult);
+  }
 }
+

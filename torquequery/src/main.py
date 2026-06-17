@@ -11,6 +11,8 @@ from src.rag.engine import init_runtime, init_query_engine, answer
 from src.fs.runtime import PathTreeRuntime
 from src.fs.planner import QueryPlanner
 from src.fs.resolvers import DefaultLazyResolver
+from src.fs.plan_graph import PlanGraphStore
+from src.fs.orchestrator import CICOrchestrator
 
 cfg = load_config()
 _state: dict = {}
@@ -22,6 +24,11 @@ chroma_dir = cfg["paths"]["chroma_dir"]
 fs_runtime = PathTreeRuntime(workspace_root, chroma_dir)
 query_planner = QueryPlanner(chroma_dir)
 lazy_resolver = DefaultLazyResolver(workspace_root)
+
+# Initialize Plan Graph Store
+plan_db_path = os.path.abspath(os.path.join(chroma_dir, "..", "plan_graph.db"))
+plan_graph = PlanGraphStore(plan_db_path)
+orchestrator = CICOrchestrator(plan_graph)
 
 # In-memory session store for ChatEditSession
 sessions = {}
@@ -315,6 +322,12 @@ class FSSearchRequest(BaseModel):
     pathPrefix: str | None = None
     maxResults: int | None = 10
 
+class FSHybridSearchRequest(BaseModel):
+    user: UserContextModel
+    query: str
+    pathPrefix: str | None = None
+    maxResults: int | None = 10
+
 class FSFindRequest(BaseModel):
     user: UserContextModel
     tags: list[str] | None = None
@@ -491,6 +504,29 @@ def fs_search(req: FSSearchRequest):
         "matches": matches
     }
 
+@app.post("/api/fs/hybrid-search")
+def fs_hybrid_search(req: FSHybridSearchRequest):
+    start_time = time.time()
+    path_set, _, _ = fs_runtime.get_pruned_fs(req.user.groups, is_admin=False)
+    results = query_planner.hybrid_search(
+        query=req.query,
+        path_set=path_set,
+        path_prefix=req.pathPrefix,
+        max_results=req.maxResults or 10
+    )
+    
+    duration_ms = (time.time() - start_time) * 1000
+    from src.utils.metrics import log_metric
+    log_metric("/api/fs/hybrid-search", duration_ms, {
+        "pathPrefix": req.pathPrefix,
+        "docsMatchesCount": len(results["documents"]),
+        "tasksMatchesCount": len(results["tasks"]),
+        "decisionsMatchesCount": len(results["decisions"])
+    })
+    
+    return results
+
+
 @app.post("/api/fs/find")
 def fs_find(req: FSFindRequest):
     _, _, meta_map = fs_runtime.get_pruned_fs(req.user.groups, is_admin=False)
@@ -638,3 +674,293 @@ def api_pdf_search(req: PDFSearchRequest):
 def fs_metrics():
     from src.utils.metrics import get_metrics_summary
     return get_metrics_summary()
+
+
+# --- Plan Graph Models ---
+class TaskCreateRequest(BaseModel):
+    title: str
+    description: str | None = None
+    status: str | None = "pending"
+    contextMetadata: dict | None = None
+    taskId: str | None = None
+
+class TaskStatusRequest(BaseModel):
+    status: str
+
+class ArtifactRecordRequest(BaseModel):
+    taskId: str
+    path: str
+    type: str
+    checksum: str | None = None
+    artifactId: str | None = None
+
+class DecisionRecordRequest(BaseModel):
+    taskId: str
+    rationale: str | None = None
+    optionsConsidered: dict | None = None
+    chosenOption: str | None = None
+    decisionId: str | None = None
+
+class AgentRunRecordRequest(BaseModel):
+    taskId: str
+    agentType: str
+    status: str
+    executionTrace: dict | None = None
+    runId: str | None = None
+
+class EdgeLinkRequest(BaseModel):
+    sourceId: str
+    targetId: str
+    relationType: str
+
+
+# --- Plan Graph Routes ---
+
+@app.post("/api/plan/task/create")
+def api_create_task(req: TaskCreateRequest):
+    return plan_graph.create_task(
+        title=req.title,
+        description=req.description,
+        status=req.status or "pending",
+        context_metadata=req.contextMetadata,
+        task_id=req.taskId
+    )
+
+@app.post("/api/plan/task/{taskId}/status")
+def api_update_task_status(taskId: str, req: TaskStatusRequest):
+    node = plan_graph.get_node(taskId)
+    if not node or node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{taskId}' not found")
+    plan_graph.update_task_status(taskId, req.status)
+    return {"status": "ok"}
+
+@app.get("/api/plan/task/search")
+def api_search_tasks(query: str):
+    return plan_graph.search_tasks(query)
+
+@app.get("/api/plan/task/{taskId}")
+def api_get_task(taskId: str):
+    node = plan_graph.get_node(taskId)
+    if not node or node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{taskId}' not found")
+    return node
+
+@app.get("/api/plan/task/{taskId}/dependencies")
+def api_get_task_dependencies(taskId: str):
+    node = plan_graph.get_node(taskId)
+    if not node or node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{taskId}' not found")
+    return plan_graph.get_dependencies(taskId)
+
+@app.get("/api/plan/task/{taskId}/blockers")
+def api_get_task_blockers(taskId: str):
+    node = plan_graph.get_node(taskId)
+    if not node or node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{taskId}' not found")
+    return plan_graph.get_blockers(taskId)
+
+@app.get("/api/plan/task/{taskId}/view")
+def api_get_task_view(taskId: str):
+    node = plan_graph.get_node(taskId)
+    if not node or node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{taskId}' not found")
+    return plan_graph.get_plan_view(taskId)
+
+@app.post("/api/plan/artifact/record")
+def api_record_artifact(req: ArtifactRecordRequest):
+    task_node = plan_graph.get_node(req.taskId)
+    if not task_node or task_node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{req.taskId}' not found")
+    return plan_graph.record_artifact(
+        task_id=req.taskId,
+        path=req.path,
+        type=req.type,
+        checksum=req.checksum,
+        artifact_id=req.artifactId
+    )
+
+@app.post("/api/plan/decision/record")
+def api_record_decision(req: DecisionRecordRequest):
+    task_node = plan_graph.get_node(req.taskId)
+    if not task_node or task_node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{req.taskId}' not found")
+    return plan_graph.record_decision(
+        task_id=req.taskId,
+        rationale=req.rationale,
+        options_considered=req.optionsConsidered,
+        chosen_option=req.chosenOption,
+        decision_id=req.decisionId
+    )
+
+@app.post("/api/plan/agent_run/record")
+def api_record_agent_run(req: AgentRunRecordRequest):
+    task_node = plan_graph.get_node(req.taskId)
+    if not task_node or task_node["nodeType"] != "task":
+        raise HTTPException(status_code=404, detail=f"Task '{req.taskId}' not found")
+    return plan_graph.record_agent_run(
+        task_id=req.taskId,
+        agent_type=req.agentType,
+        status=req.status,
+        execution_trace=req.executionTrace,
+        run_id=req.runId
+    )
+
+@app.post("/api/plan/edge/link")
+def api_link_nodes(req: EdgeLinkRequest):
+    src = plan_graph.get_node(req.sourceId)
+    tgt = plan_graph.get_node(req.targetId)
+    if not src:
+        raise HTTPException(status_code=404, detail=f"Source node '{req.sourceId}' not found")
+    if not tgt:
+        raise HTTPException(status_code=404, detail=f"Target node '{req.targetId}' not found")
+    plan_graph.link_nodes(req.sourceId, req.targetId, req.relationType)
+    return {"status": "ok"}
+
+@app.get("/api/plan/node/{nodeId}")
+def api_get_node(nodeId: str):
+    node = plan_graph.get_node(nodeId)
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node '{nodeId}' not found")
+    return node
+
+@app.get("/api/plan/node/{nodeId}/edges")
+def api_get_node_edges(nodeId: str):
+    node = plan_graph.get_node(nodeId)
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node '{nodeId}' not found")
+    return plan_graph.get_edges(nodeId)
+
+@app.get("/api/plan/node/{nodeId}/children")
+def api_get_node_children(nodeId: str, relationType: str | None = None):
+    node = plan_graph.get_node(nodeId)
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node '{nodeId}' not found")
+    return plan_graph.get_children(nodeId, relationType)
+
+@app.get("/api/plan/node/{nodeId}/parents")
+def api_get_node_parents(nodeId: str, relationType: str | None = None):
+    node = plan_graph.get_node(nodeId)
+    if not node:
+        raise HTTPException(status_code=404, detail=f"Node '{nodeId}' not found")
+    return plan_graph.get_parents(nodeId, relationType)
+
+
+# --- CIC Orchestrator Models ---
+class TaskSubmitRequest(BaseModel):
+    title: str
+    description: str | None = None
+    priority: str | None = "normal"
+    executionPolicy: dict | None = None
+    tenant: str | None = "default"
+    rbacContext: dict | None = None
+
+class TaskDelegateRequest(BaseModel):
+    title: str
+    description: str | None = None
+    priority: str | None = "normal"
+    executionPolicy: dict | None = None
+
+class RunStartRequest(BaseModel):
+    taskId: str
+    agentType: str
+
+class HeartbeatRequest(BaseModel):
+    toolCallsIncrement: int | None = 0
+    traceUpdate: dict | None = None
+
+class RunEndRequest(BaseModel):
+    status: str
+    executionTrace: dict | None = None
+
+
+# --- CIC Orchestrator Endpoints ---
+@app.post("/api/orchestrator/task/submit")
+def api_orchestrator_submit_task(req: TaskSubmitRequest):
+    try:
+        return orchestrator.submit_task(
+            title=req.title,
+            description=req.description,
+            priority=req.priority or "normal",
+            execution_policy=req.executionPolicy,
+            tenant=req.tenant or "default",
+            rbac_context=req.rbacContext
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orchestrator/task/{taskId}/delegate")
+def api_orchestrator_delegate_task(taskId: str, req: TaskDelegateRequest):
+    try:
+        return orchestrator.delegate_task(
+            parent_task_id=taskId,
+            title=req.title,
+            description=req.description,
+            priority=req.priority or "normal",
+            execution_policy=req.executionPolicy
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orchestrator/task/{taskId}/cancel")
+def api_orchestrator_cancel_task(taskId: str):
+    try:
+        orchestrator.cancel_task(taskId)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orchestrator/task/{taskId}/complete")
+def api_orchestrator_complete_task(taskId: str):
+    try:
+        orchestrator.complete_task(taskId)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orchestrator/run/start")
+def api_orchestrator_start_run(req: RunStartRequest):
+    try:
+        return orchestrator.record_run_start(
+            task_id=req.taskId,
+            agent_type=req.agentType
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orchestrator/run/{runId}/heartbeat")
+def api_orchestrator_heartbeat(runId: str, req: HeartbeatRequest):
+    try:
+        return orchestrator.record_heartbeat(
+            run_id=runId,
+            tool_calls_increment=req.toolCallsIncrement or 0,
+            trace_update=req.traceUpdate
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orchestrator/run/{runId}/end")
+def api_orchestrator_end_run(runId: str, req: RunEndRequest):
+    try:
+        orchestrator.record_run_end(
+            run_id=runId,
+            status=req.status,
+            execution_trace=req.executionTrace
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/orchestrator/task/{taskId}/context")
+def api_orchestrator_get_task_context(taskId: str):
+    try:
+        return orchestrator.get_plan_context_envelope(taskId)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
