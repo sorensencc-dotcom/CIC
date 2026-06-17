@@ -268,8 +268,15 @@ class QueryPlanner:
                 return []
                 
             collection = client.get_collection("torquequery")
-            # Query using Chroma's default text embedding mechanism
-            results = collection.query(query_texts=[query], n_results=min(top_k, 50))
+            
+            # Query using LlamaIndex embed model to avoid downloading Chroma default models
+            from llama_index.core import Settings
+            if Settings.embed_model:
+                query_embedding = Settings.embed_model.get_text_embedding(query)
+                results = collection.query(query_embeddings=[query_embedding], n_results=min(top_k, 50))
+            else:
+                # Fallback if embed_model not set
+                results = collection.query(query_texts=[query], n_results=min(top_k, 50))
             
             if results and results.get("distances") and results.get("metadatas"):
                 for dists, metadatas in zip(results["distances"], results["metadatas"]):

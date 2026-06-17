@@ -24,3 +24,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# TorqueQuery Local Storage Logs
+torquequery/storage/metrics/
+

@@ -14,7 +14,7 @@ class PathTreeRuntime:
         self.workspace_root = workspace_root
         self.chroma_dir = chroma_dir
         self._state: Optional[PathTreeState] = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def get_full_tree(self) -> Dict[str, Any]:
         with self._lock:

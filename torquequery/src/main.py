@@ -95,6 +95,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def log_observability_metrics(request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = (time.time() - start_time) * 1000
+    
+    path = request.url.path
+    if path.startswith("/api/fs") or path in ["/query", "/ingest"]:
+        # Log metric in background thread
+        import asyncio
+        from src.utils.metrics import log_metric
+        loop = asyncio.get_event_loop()
+        # Avoid duplicate logging for search since we log search specifically
+        if path != "/api/fs/search":
+            loop.run_in_executor(None, log_metric, path, process_time)
+            
+    return response
+
 class Query(BaseModel):
     question: str
     taskLabels: list[str] | None = None
@@ -447,6 +465,7 @@ def fs_read(req: FSReadRequest):
 
 @app.post("/api/fs/search")
 def fs_search(req: FSSearchRequest):
+    start_time = time.time()
     path_set, _, _ = fs_runtime.get_pruned_fs(req.user.groups, is_admin=False)
     matches = query_planner.search(
         query=req.query,
@@ -455,6 +474,15 @@ def fs_search(req: FSSearchRequest):
         path_prefix=req.pathPrefix,
         max_results=req.maxResults or 10
     )
+    
+    duration_ms = (time.time() - start_time) * 1000
+    from src.utils.metrics import log_metric
+    log_metric("/api/fs/search", duration_ms, {
+        "mode": req.mode,
+        "pathPrefix": req.pathPrefix,
+        "matchesCount": len(matches)
+    })
+    
     return {
         "pattern": {
             "query": req.query,
@@ -605,3 +633,8 @@ def api_pdf_search(req: PDFSearchRequest):
         "path": req.pdfPath,
         "snippets": snippets[:5]
     }
+
+@app.get("/api/fs/metrics")
+def fs_metrics():
+    from src.utils.metrics import get_metrics_summary
+    return get_metrics_summary()
