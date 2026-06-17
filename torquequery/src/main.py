@@ -126,13 +126,19 @@ class Query(BaseModel):
 
 @app.post("/query")
 def query(req: Query):
+    from src.utils.validation import validate_query, ValidationError
+    try:
+        question, labels = validate_query(req.question, req.taskLabels)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     qe = _state.get("qe")
     if qe is None:
         raise HTTPException(
             status_code=503,
             detail=f"Service initializing. Error: {_state.get('init_error', 'None')}"
         )
-    return answer(cfg, qe, req.question, req.taskLabels or [])
+    return answer(cfg, qe, question, labels)
 
 @app.post("/ingest")
 def ingest():
@@ -417,11 +423,13 @@ def fs_list(req: FSListRequest):
 
 @app.post("/api/fs/read")
 def fs_read(req: FSReadRequest):
-    meta = _validate_path_rbac(req.user, req.path)
-    normalized_path = req.path.replace("\\", "/").strip("/")
-    
-    offset = req.offset or 0
-    limit = req.limit or 50000
+    from src.utils.validation import validate_fs_read, ValidationError
+    try:
+        normalized_path, offset, limit = validate_fs_read(req.path, req.offset, req.limit)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    meta = _validate_path_rbac(req.user, normalized_path)
     
     if meta.get("lazy", False):
         content = lazy_resolver.resolve(normalized_path, meta, offset, limit)
@@ -561,10 +569,16 @@ def fs_stat(req: FSStatRequest):
 
 @app.post("/api/fs/spec/list")
 def api_spec_list(req: SpecListRequest):
-    _validate_path_rbac(req.user, req.specPath)
-    
+    from src.utils.validation import validate_spec_path, ValidationError
+    try:
+        spec_path = validate_spec_path(req.specPath)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    _validate_path_rbac(req.user, spec_path)
+
     # Read the spec file content fully
-    read_req = FSReadRequest(user=req.user, path=req.specPath, offset=0, limit=200000)
+    read_req = FSReadRequest(user=req.user, path=spec_path, offset=0, limit=200000)
     read_res = fs_read(read_req)
     spec_content = read_res["content"]
     
@@ -646,9 +660,15 @@ def api_pdf_extract_section(req: PDFSectionRequest):
 
 @app.post("/api/fs/pdf/extract-pages")
 def api_pdf_extract_pages(req: PDFPagesRequest):
+    from src.utils.validation import validate_page_range, ValidationError
+    try:
+        start_page, end_page = validate_page_range(req.startPage, req.endPage)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     pdf_bytes = _get_pdf_bytes(req.user, req.pdfPath)
     from src.tools.pdf_extractor import extract_pages
-    content = extract_pages(pdf_bytes, req.startPage, req.endPage)
+    content = extract_pages(pdf_bytes, start_page, end_page)
     return {"content": content}
 
 @app.post("/api/fs/pdf/search")
