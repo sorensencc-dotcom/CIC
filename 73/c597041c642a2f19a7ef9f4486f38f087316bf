@@ -1,0 +1,25 @@
+docs/API_PLANNING_SERVER.md
+  s_d338468afc386e::t_3adcc84e6c6eca 1-290
+PHASE2_PHASE3_EXECUTION.md
+  s_d338468afc386e::t_56b1ff1cd6eeda 1-241
+docs/PHASE2_ARCHITECTURE.md
+  s_d338468afc386e::t_5dbf431136d38a 1-333
+docs/PHASE2_PHASE3_SUMMARY.md
+  s_d338468afc386e::t_4fd2922ba81677 1-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "73c597041c642a2f19a7ef9f4486f38f087316bf",
+  "prompts": {},
+  "sessions": {
+    "s_d338468afc386e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8784db7d-233a-4e67-ba8d-7499b1ba2624",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
