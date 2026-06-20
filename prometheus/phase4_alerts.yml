@@ -1,0 +1,136 @@
+groups:
+  - name: phase4_ingestion_alerts
+    interval: 30s
+    rules:
+      # === LATENCY ALERTS ===
+      - alert: HighLatencyWarning
+        expr: histogram_quantile(0.95, rate(navigate_latency_ms_bucket[5m])) > 3000
+        for: 5m
+        labels:
+          severity: warning
+          service: planning-engine
+        annotations:
+          summary: "High latency warning (p95 > 3s for 5m)"
+          description: "Navigate P95 latency: {{ $value | humanizeDuration }}"
+
+      - alert: HighLatencyCritical
+        expr: histogram_quantile(0.95, rate(navigate_latency_ms_bucket[5m])) > 5000
+        for: 2m
+        labels:
+          severity: critical
+          service: planning-engine
+        annotations:
+          summary: "Critical high latency (p95 > 5s for 2m)"
+          description: "Navigate P95 latency: {{ $value | humanizeDuration }}"
+
+      # === SUCCESS RATE ALERTS ===
+      - alert: LowSuccessRateWarning
+        expr: navigate_success_rate < 0.90
+        for: 5m
+        labels:
+          severity: warning
+          service: planning-engine
+        annotations:
+          summary: "Success rate warning (< 90% for 5m)"
+          description: "Success rate: {{ $value | humanizePercentage }}"
+
+      - alert: LowSuccessRateCritical
+        expr: navigate_success_rate < 0.80
+        for: 2m
+        labels:
+          severity: critical
+          service: planning-engine
+        annotations:
+          summary: "Critical success rate drop (< 80% for 2m)"
+          description: "Success rate: {{ $value | humanizePercentage }}"
+
+      # === WARM POOL ALERTS ===
+      - alert: UnhealthySessionsWarning
+        expr: warm_pool_unhealthy_count > 1
+        for: 1m
+        labels:
+          severity: warning
+          service: planning-engine
+        annotations:
+          summary: "Unhealthy sessions in pool"
+          description: "Unhealthy sessions: {{ $value }} (threshold: 1)"
+
+      - alert: PoolStarvation
+        expr: warm_pool_size < warm_pool_target
+        for: 30s
+        labels:
+          severity: critical
+          service: planning-engine
+        annotations:
+          summary: "Warm pool size below target"
+          description: "Pool size: {{ $value }} / {{ $value | label_join(warm_pool_target) }}"
+
+      # === RETRY ALERTS ===
+      - alert: HighRetryRateWarning
+        expr: |
+          sum(rate(retry_count_total[5m]))
+          / sum(rate(navigate_count_total[5m])) > 0.20
+        for: 5m
+        labels:
+          severity: warning
+          service: planning-engine
+        annotations:
+          summary: "High retry rate (> 20% for 5m)"
+          description: "Retry rate: {{ $value | humanizePercentage }}"
+
+      - alert: HighFinalFailureRateCritical
+        expr: |
+          sum(rate(retry_final_failure_count[5m]))
+          / sum(rate(retry_count_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: planning-engine
+        annotations:
+          summary: "High final failure rate (> 5%)"
+          description: "Final failure rate: {{ $value | humanizePercentage }}"
+
+      # === HYDRATION ALERTS ===
+      - alert: LowHydrationScoreWarning
+        expr: histogram_quantile(0.5, rate(hydration_score_bucket[5m])) < 60
+        for: 5m
+        labels:
+          severity: warning
+          service: planning-engine
+        annotations:
+          summary: "Low hydration score (p50 < 60 for 5m)"
+          description: "Hydration p50: {{ $value }}"
+
+      # === DRIFT ALERTS ===
+      - alert: VerticalDriftWarning
+        expr: vertical_drift_percent >= 10
+        for: 5m
+        labels:
+          severity: warning
+          service: planning-engine
+          vertical: "{{ $labels.vertical }}"
+        annotations:
+          summary: "Vertical drift detected ({{ $labels.vertical }})"
+          description: "Drift: {{ $value | humanizePercentage }}"
+
+      - alert: VerticalDriftCritical
+        expr: vertical_drift_percent >= 20
+        for: 2m
+        labels:
+          severity: critical
+          service: planning-engine
+          vertical: "{{ $labels.vertical }}"
+        annotations:
+          summary: "Critical vertical drift ({{ $labels.vertical }})"
+          description: "Drift: {{ $value | humanizePercentage }}"
+
+      # === WAF ALERTS ===
+      - alert: WAFBlockSpikeWarning
+        expr: waf_block_rate > 0.005
+        for: 5m
+        labels:
+          severity: warning
+          service: planning-engine
+        annotations:
+          summary: "WAF block spike (> 0.5% for 5m)"
+          description: "WAF block rate: {{ $value | humanizePercentage }}"
