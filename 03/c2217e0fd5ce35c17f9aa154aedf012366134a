@@ -1,0 +1,58 @@
+src/lib/logger.ts
+  s_a5b979d7a95920::t_ce76b3e29ee3a2 1-37
+src/extractors/browser/WarmPoolManager.test.ts
+  s_a5b979d7a95920::t_9d6661e8487c86 1-372
+src/extractors/browser/CloakBrowser.ts
+  s_a5b979d7a95920::t_9d6661e8487c86 1-23
+src/governance/services/change-detection-service.test.ts
+  s_d038ea83caca3f::t_1c351fdd687ca6 288-289
+  s_d038ea83caca3f::t_c073d6a9b27260 249
+  s_d038ea83caca3f::t_84d9c165f60804 192-193
+  s_d038ea83caca3f::t_cbf021b42c03d7 220-223
+  s_d038ea83caca3f::t_f83e9c9d245c31 145
+  s_d038ea83caca3f::t_7d1d3f5672de8a 42
+  s_d038ea83caca3f::t_f824c3bba75a80 135-136
+  s_d038ea83caca3f::t_dff2a40c8ea245 75-76
+  s_d038ea83caca3f::t_95d40b47730cb9 85
+src/extractors/browser/CloakBrowserAdapter.WarmPool.ts
+  s_a5b979d7a95920::t_9d6661e8487c86 1-188
+src/extractors/browser/DomSampler.ts
+  s_a5b979d7a95920::t_9d6661e8487c86 1-191
+src/extractors/browser/SpaHydrationDetector.test.ts
+  s_a5b979d7a95920::t_9d6661e8487c86 1-206
+src/extractors/browser/DomSampler.test.ts
+  s_a5b979d7a95920::t_e7a2afe228d7ae 230
+  s_a5b979d7a95920::t_9d6661e8487c86 1-229,231-294
+src/extractors/browser/SpaHydrationDetector.ts
+  s_a5b979d7a95920::t_9d6661e8487c86 1-231
+src/extractors/browser/WarmPoolManager.ts
+  s_a5b979d7a95920::t_2ad34ecfbc4187 372
+  s_a5b979d7a95920::t_9d6661e8487c86 1-30,32-37,39-140,142-145,147-371,373-410
+  s_a5b979d7a95920::t_85756a4a7cb325 141,146
+  s_a5b979d7a95920::t_2f3a18d8deb9ee 38
+  s_a5b979d7a95920::t_7558712d5c9d82 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "03c2217e0fd5ce35c17f9aa154aedf012366134a",
+  "prompts": {},
+  "sessions": {
+    "s_a5b979d7a95920": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3d1ca9bc-dd34-44cc-bdcf-c9f70b862f20",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    },
+    "s_d038ea83caca3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11c118cb-0fe8-4755-9b25-9d4f8cef160d",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
