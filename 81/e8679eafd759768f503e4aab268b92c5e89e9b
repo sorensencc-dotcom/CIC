@@ -1,0 +1,20 @@
+src/extractors/browser/WarmPoolManager.test.ts
+  s_d338468afc386e::t_b0d22d782c089b 243-245,249-263
+  s_d338468afc386e::t_afbc61f1ba181b 152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "81e8679eafd759768f503e4aab268b92c5e89e9b",
+  "prompts": {},
+  "sessions": {
+    "s_d338468afc386e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8784db7d-233a-4e67-ba8d-7499b1ba2624",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
