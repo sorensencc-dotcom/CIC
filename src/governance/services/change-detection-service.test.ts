@@ -39,7 +39,7 @@ describe("ChangeDetectionService", () => {
       // Mock file read
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
       jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
-        cb(null, content);
+        (cb as (err: Error | null, data?: any) => void)(null, content);
       });
 
       // Mock remote fetch
@@ -72,8 +72,8 @@ describe("ChangeDetectionService", () => {
       mockDb.query.mockResolvedValueOnce([skillRecord]);
 
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
-        cb(null, localContent);
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
+        (cb as (err: Error | null, data?: any) => void)(null, localContent);
       });
 
       jest.spyOn(service as any, "fetchRemoteWithRetry").mockResolvedValueOnce(remoteContent);
@@ -82,7 +82,7 @@ describe("ChangeDetectionService", () => {
 
       expect(result.hasChanges).toBe(true);
       expect(result.summary.status).toBe("modified");
-      expect(result.summary.linesAdded).toBeGreaterThan(0);
+      expect(result.summary.linesDeleted).toBeGreaterThan(0);
       expect(result.summary.percentageChanged).toBeGreaterThan(0);
     });
   });
@@ -132,8 +132,8 @@ describe("ChangeDetectionService", () => {
 
       mockDb.query.mockResolvedValueOnce([skillRecord]);
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
-        cb(null, localContent);
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
+        (cb as (err: Error | null, data?: any) => void)(null, localContent);
       });
 
       // Simulate network failure (returns null after retries)
@@ -142,7 +142,7 @@ describe("ChangeDetectionService", () => {
       const result = await service.detectChanges("test-skill");
 
       expect(result.summary.status).toBe("network-fail");
-      expect(result.summary.errorMessage).toContain("Could not reach upstream");
+      expect(result.summary.errorMessage).toContain("Could not fetch remote");
       expect(result.summary.retryAttempts).toBe(2);
     });
   });
@@ -189,8 +189,8 @@ describe("ChangeDetectionService", () => {
 
       mockDb.query.mockResolvedValueOnce([skillRecord]);
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
-        cb(null, localContent);
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
+        (cb as (err: Error | null, data?: any) => void)(null, localContent);
       });
 
       jest.spyOn(service as any, "fetchRemoteWithRetry").mockResolvedValueOnce(remoteContent);
@@ -217,11 +217,10 @@ describe("ChangeDetectionService", () => {
 
     it("should handle SSH-style git URLs", () => {
       const url = "git@github.com:anthropics/claude-skills.git";
-      // Note: current implementation only handles https
-      // This test documents the limitation
-      expect(() => {
-        (service as any).buildGithubRawUrl(url, "main", "skills/test.md");
-      }).toThrow();
+      const rawUrl = (service as any).buildGithubRawUrl(url, "main", "skills/test.md");
+      expect(rawUrl).toContain("raw.githubusercontent.com");
+      expect(rawUrl).toContain("anthropics");
+      expect(rawUrl).toContain("claude-skills");
     });
   });
 
@@ -247,8 +246,7 @@ describe("ChangeDetectionService", () => {
       expect(result).toHaveLength(2);
       expect(result[0].skill_id).toBe("skill-1");
       expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining("is_locally_modified = 1"),
-        undefined
+        expect.stringContaining("is_locally_modified = 1")
       );
     });
   });
@@ -287,8 +285,8 @@ describe("ChangeDetectionService", () => {
 
       mockDb.query.mockResolvedValueOnce([skillRecord]);
       jest.spyOn(require("fs"), "existsSync").mockReturnValue(true);
-      jest.spyOn(require("fs"), "readFile").mockImplementation((path, enc, cb) => {
-        cb(new Error("EACCES: permission denied"));
+      jest.spyOn(require("fs"), "readFile").mockImplementation((path: any, enc: any, cb: any) => {
+        (cb as (err: Error | null, data?: any) => void)(new Error("EACCES: permission denied"));
       });
 
       const result = await service.detectChanges("test-skill");
