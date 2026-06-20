@@ -1,0 +1,39 @@
+{
+  "name": "TorqueQueryLocal",
+  "version": "0.1.0-alpha",
+  "description": "Local MkDocs-aware documentation resolver for CIC. Provides deterministic, zero-token answers with provenance.",
+  "capabilities": {
+    "resolveDocs": {
+      "input": {
+        "question": "string",
+        "taskLabels": "string[]"
+      },
+      "output": {
+        "answer": "string",
+        "sources": [
+          {
+            "file": "string",
+            "section": "string",
+            "tags": "string[]",
+            "score": "number"
+          }
+        ],
+        "confidence": "number",
+        "not_in_docs": "boolean"
+      }
+    }
+  },
+  "runtime": {
+    "type": "http",
+    "endpoint": "http://localhost:8000/query",
+    "method": "POST"
+  },
+  "health": {
+    "endpoint": "http://localhost:8000/health",
+    "method": "GET"
+  },
+  "ingestion": {
+    "endpoint": "http://localhost:8000/ingest",
+    "method": "POST"
+  }
+}

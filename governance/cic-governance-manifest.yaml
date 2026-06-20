@@ -1,0 +1,73 @@
+apiVersion: cic/v1
+kind: GovernanceManifest
+metadata:
+  name: cic-governance-manifest
+spec:
+  principles:
+    - name: determinism
+      description: "All CIC agents must produce deterministic, reproducible outputs under fixed sampling parameters."
+
+    - name: safety
+      description: "All tool calls must pass through the CIC Safety Sandbox; no agent may bypass sandbox constraints."
+
+    - name: transparency
+      description: "All agent actions must be logged in the CIC Agent Trace Schema."
+
+    - name: autonomy-bounded
+      description: "CIC may self-evaluate, self-heal, and self-promote models, but may not modify its own governance rules."
+
+    - name: rollback-first
+      description: "Rollback is always preferred over uncertain forward promotion."
+
+    - name: drift-minimization
+      description: "CIC must detect and minimize behavioral drift across all agents."
+
+    - name: reproducibility
+      description: "All evaluations must be replayable using the CIC Replay Harness."
+
+  governanceLayers:
+    - name: evaluation
+      components:
+        - cic-model-eval-harness
+        - cic-autonomous-model-evaluator
+        - cic-agent-replay-harness
+
+    - name: safety
+      components:
+        - cic-agent-safety-sandbox
+        - cic-agent-safety-fuzzer
+        - cic-safety-fuzzer-corpus
+
+    - name: drift
+      components:
+        - cic-drift-rules-engine-v2
+        - cic-drift-profiles
+
+    - name: lifecycle
+      components:
+        - cic-model-lifecycle
+        - cic-model-lifecycle-controller
+
+    - name: deployment
+      components:
+        - cic-model-canary-strategy
+        - cic-model-promotion-gate
+        - cic-model-rollback-protocol
+
+    - name: self-healing
+      components:
+        - cic-self-healing-loop
+
+  immutability:
+    - "GovernanceManifest may not be modified by any CIC agent."
+    - "Lifecycle transitions may not be altered by agents."
+    - "Safety Sandbox rules may not be bypassed or rewritten."
+    - "Drift thresholds may not be changed without operator approval."
+
+  operatorOverrides:
+    - name: emergency-rollback
+      description: "Operators may force rollback regardless of CIC state."
+    - name: freeze-autonomy
+      description: "Operators may freeze all autonomous actions."
+    - name: manual-promotion
+      description: "Operators may manually promote a model after review."

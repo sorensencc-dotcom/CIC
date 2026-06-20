@@ -1,0 +1,34 @@
+{
+  "docs/auth/oauth": {
+    "type": "page",
+    "source": "mintlify",
+    "isPublic": true,
+    "groups": [],
+    "tags": ["auth", "oauth"],
+    "lazy": false
+  },
+  "docs/auth/api-keys": {
+    "type": "page",
+    "source": "mintlify",
+    "isPublic": true,
+    "groups": [],
+    "tags": ["auth", "keys"],
+    "lazy": false
+  },
+  "internal/billing": {
+    "type": "page",
+    "source": "internal",
+    "isPublic": false,
+    "groups": ["admin", "billing"],
+    "tags": ["billing"],
+    "lazy": false
+  },
+  "api-specs/v2.json": {
+    "type": "spec",
+    "source": "s3",
+    "isPublic": false,
+    "groups": ["admin"],
+    "tags": ["openapi"],
+    "lazy": true
+  }
+}

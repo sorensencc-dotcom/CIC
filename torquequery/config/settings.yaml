@@ -1,0 +1,17 @@
+models:
+  llm: "llama3.2:1b"
+  embedding: "nomic-embed-text"
+  reranker: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+paths:
+  docs_root: "../../docs"
+  mkdocs_yml: "../../mkdocs.yml"
+  chroma_dir: "./storage/chroma"
+
+chunking:
+  chunk_size: 1024
+  chunk_overlap: 128
+
+retrieval:
+  top_k: 5
+  max_context_tokens: 8192
