@@ -41,6 +41,7 @@ export class CloakBrowserAdapterWithWarmPool {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       let session: WarmPoolSession | null = null
+      let navigationStart = 0
 
       try {
         // Checkout session
@@ -52,7 +53,7 @@ export class CloakBrowserAdapterWithWarmPool {
           sessionId: session.id
         })
 
-        const navigationStart = Date.now()
+        navigationStart = Date.now()
 
         // Create page
         const page = await session.browser.newPage()
