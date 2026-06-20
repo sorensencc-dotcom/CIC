@@ -1,0 +1,27 @@
+PHASE4_PRD.md
+  s_d338468afc386e::t_580122865e6cef 1-319
+PHASE4_EXECUTION_CHECKLIST.md
+  s_d338468afc386e::t_2c7c1b60569370 1-428
+load-tests/phase4_saturation.js
+  s_d338468afc386e::t_0c48620085bc90 1-69
+prometheus/phase4_alerts.yml
+  s_d338468afc386e::t_fcfeca2dc8aff8 1-136
+load-tests/phase4_baseline.js
+  s_d338468afc386e::t_3ef13e3c61f740 1-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "6afaedc3720a7eaa9d06283a954572c0d34dca21",
+  "prompts": {},
+  "sessions": {
+    "s_d338468afc386e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8784db7d-233a-4e67-ba8d-7499b1ba2624",
+        "model": "claude-haiku-4-5-20251001"
+      },
+      "human_author": "Chris Sorensen <sorensencc@gmail.com>"
+    }
+  }
+}
